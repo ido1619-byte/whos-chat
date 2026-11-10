@@ -15,10 +15,17 @@
 
 const FIREBASE_VERSION = "12.14.0";
 
+// On guessthechat.com, signing in opens Google's page in the same tab, through
+// the site's own copy of Firebase's sign-in pages (the __/auth folder, kept up
+// to date by the "Update sign-in files" action). Google then shows
+// "guessthechat.com". Anywhere else, a small sign-in window is used instead.
+const SITE_DOMAIN = "guessthechat.com";
+const ON_SITE = typeof location !== "undefined" && location.hostname === SITE_DOMAIN;
+
 // Public web settings of the Firebase project (not a secret).
 const FIREBASE_CONFIG = {
   apiKey: "AIzaSyBVYaTSFmrT2cqyMUWuAuvDPBUo-qKgAqo",
-  authDomain: "guess-the-chat-1f021.firebaseapp.com",
+  authDomain: ON_SITE ? SITE_DOMAIN : "guess-the-chat-1f021.firebaseapp.com",
   projectId: "guess-the-chat-1f021",
   storageBucket: "guess-the-chat-1f021.firebasestorage.app",
   messagingSenderId: "581480763764",
@@ -386,7 +393,16 @@ function init() {
         renderAccountButton();
         if (user) sync();
       });
-      authMod.getRedirectResult(fb.auth).catch(() => {});
+      // Coming back from Google's sign-in page.
+      authMod
+        .getRedirectResult(fb.auth)
+        .then((result) => {
+          if (result && result.user) toast("Signed in. Your stats now sync.");
+        })
+        .catch((e) => {
+          console.warn("Guess the Chat: sign-in failed", e);
+          toast("Could not sign in. Please try again.");
+        });
       return fb;
     } catch (e) {
       console.warn("Guess the Chat: sign-in could not load", e);
@@ -410,18 +426,20 @@ function init() {
     }
     const provider = new fb.GoogleAuthProvider();
     provider.setCustomParameters({ prompt: "select_account" });
+    if (ON_SITE) {
+      try {
+        await fb.signInWithRedirect(fb.auth, provider);
+        return; // the page now moves to Google's sign-in page
+      } catch (e) {
+        console.warn("Guess the Chat: same-tab sign-in failed, using a window", e);
+      }
+    }
     try {
       await fb.signInWithPopup(fb.auth, provider);
       closeWindow();
       toast("Signed in. Your stats now sync.");
     } catch (e) {
       const code = (e && e.code) || "";
-      if (code === "auth/popup-blocked" || code === "auth/operation-not-supported-in-this-environment") {
-        try {
-          await fb.signInWithRedirect(fb.auth, provider);
-          return;
-        } catch (e2) {}
-      }
       done();
       if (code === "auth/popup-closed-by-user" || code === "auth/cancelled-popup-request") return;
       console.warn("Guess the Chat: sign-in failed", e);
