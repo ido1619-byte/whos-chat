@@ -23,7 +23,7 @@
   "startingClipsPerStreamer": 20,
   "newClipsPerStreamerPerRun": 5,
   "maxClipsPerStreamer": 400,
-  "maxClipPagesPerStreamer": 3,
+  "maxClipPagesPerStreamer": 5,
   "maxChatSeconds": 25,
   "minMessages": 25,
   "firstRevealSeconds": 1,
