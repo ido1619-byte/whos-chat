@@ -34,30 +34,24 @@ body.gtc-layout .gtc-footer { margin-top: auto; padding-top: 32px; }
 }
 .gtc-toolbar .icon-btn { flex: none; }
 
-/* Signed out: the account button becomes a "Sign in" pill.
+/* Signed out: the account button is just the words "Sign in".
    (Signed in, it stays a round picture, as before.) */
 .gtc-toolbar #account-btn:not(.signed-in) {
   width: auto;
   height: 36px;
-  padding: 0 14px 0 11px;
-  display: inline-flex;
-  align-items: center;
-  gap: 7px;
-  border-radius: 999px;
-  border: 1px solid var(--accent, #9147ff);
-  color: var(--accent-text, #bf94ff);
+  padding: 0 4px 0 6px;
+  border: 0;
+  border-radius: 6px;
+  background: transparent;
+  color: var(--muted, #adadb8);
   font-family: var(--font-ui, "Inter", system-ui, sans-serif);
-  font-size: 14px;
-  font-weight: 600;
+  font-size: 15px;
+  font-weight: 500;
   white-space: nowrap;
-  transition: background 0.15s, color 0.15s;
 }
+.gtc-toolbar #account-btn:not(.signed-in) svg { display: none; }
 .gtc-toolbar #account-btn:not(.signed-in)::after { content: "Sign in"; }
-.gtc-toolbar #account-btn:not(.signed-in):hover {
-  background: var(--accent, #9147ff);
-  color: #fff;
-}
-.gtc-toolbar #account-btn:not(.signed-in) svg { width: 17px; height: 17px; }
+.gtc-toolbar #account-btn:not(.signed-in):hover { color: var(--fg, #efeff1); }
 
 /* The title row no longer holds buttons, so on phones the title can be full size again. */
 @media (max-width: 440px) {
