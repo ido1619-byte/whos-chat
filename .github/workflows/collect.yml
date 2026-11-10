@@ -2,7 +2,7 @@ name: Collect clips
 
 on:
   schedule:
-    - cron: "17 4 * * *"
+    - cron: "17 4 */2 * *"
   workflow_dispatch:
 
 permissions:
