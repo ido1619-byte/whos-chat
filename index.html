@@ -9,28 +9,30 @@
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,700;12..96,800&family=Inter:wght@400;500;600;700&display=swap">
 <style>
-/* Layout: one narrow centred column (logo, chat, skips, streamer picks).
+/* Layout: one narrow centred column (logo, chat, meter, skips, streamer picks).
    The result opens as a card with the clip and its chat side by side, like a Twitch channel page.
-   Single dark theme on purpose: it is a Twitch game and should feel like Twitch at night. */
+   Single dark theme on purpose: Twitch's black and purple. */
 :root {
-  --bg: #17161b;
-  --panel: #1c1b21;
-  --chat: #1f1e24;
-  --raise: #2a2930;
-  --line: #34323c;
+  --bg: #0e0e10;
+  --panel: #18181b;
+  --chat: #18181b;
+  --raise: #26262c;
+  --line: #2f2f35;
   --fg: #efeff1;
-  --muted: #a09fab;
-  --faint: #6f6d7a;
+  --muted: #adadb8;
+  --faint: #53535f;
   --accent: #9147ff;
   --accent-hi: #a970ff;
-  --light-btn: #e9e7f0;
-  --light-btn-fg: #17161b;
+  --accent-text: #bf94ff;
+  --on-accent: #ffffff;
   --good: #2fb36b;
   --bad: #e2474f;
-  --chip: #2f2d37;
-  --chip-line: #3d3a47;
-  --scrim: rgba(9, 8, 12, 0.74);
-  --cover: rgba(13, 12, 17, 0.86);
+  --meter-open: #3b2768;
+  --chip: #231a36;
+  --chip-line: #3a2b5e;
+  --chip-fg: #dccbff;
+  --scrim: rgba(0, 0, 0, 0.78);
+  --cover: rgba(14, 14, 16, 0.86);
 
   --font-display: "Bricolage Grotesque", "Inter", system-ui, sans-serif;
   --font-ui: "Inter", system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
@@ -91,6 +93,7 @@ button { font: inherit; color: inherit; }
   line-height: 1;
   letter-spacing: -0.035em;
   font-variation-settings: "opsz" 96;
+  color: var(--accent-hi);
 }
 
 .icon-btn {
@@ -219,7 +222,7 @@ button { font: inherit; color: inherit; }
   border-radius: 5px;
   background: var(--chip);
   border: 1px solid var(--chip-line);
-  color: #dcd8ea;
+  color: var(--chip-fg);
   font-size: 12px;
   font-weight: 600;
   line-height: 18px;
@@ -266,7 +269,7 @@ button { font: inherit; color: inherit; }
   border-radius: 50%;
   border: 0;
   background: var(--accent);
-  color: #fff;
+  color: var(--on-accent);
   display: grid;
   place-items: center;
   cursor: pointer;
@@ -277,7 +280,51 @@ button { font: inherit; color: inherit; }
 .play-btn:active { transform: scale(0.95); }
 .play-btn:disabled { opacity: 0.4; cursor: default; }
 
-/* ---------- Skips ---------- */
+/* ---------- Progress meter and skips ---------- */
+
+/* One bar for the whole clip. Ticks mark where each skip stops, the lighter
+   part is what the player has unlocked, purple is what has played. */
+.meter {
+  position: relative;
+  margin-top: 30px;
+  height: 14px;
+}
+.meter-clip {
+  position: absolute;
+  inset: 0;
+  border-radius: 4px;
+  overflow: hidden;
+  background: var(--raise);
+}
+.meter-open,
+.meter-fill {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  left: 0;
+  width: 0;
+}
+.meter-open { background: var(--meter-open); transition: width 0.3s ease; }
+.meter-fill { background: var(--accent); }
+.meter-tick {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  width: 2px;
+  margin-left: -1px;
+  background: var(--bg);
+}
+.meter-marker {
+  position: absolute;
+  top: -14px;
+  left: 0;
+  width: 0;
+  height: 0;
+  border-left: 7px solid transparent;
+  border-right: 7px solid transparent;
+  border-top: 10px solid var(--fg);
+  transform: translateX(-50%);
+}
 
 .controls {
   margin-top: 14px;
@@ -286,20 +333,6 @@ button { font: inherit; color: inherit; }
   justify-content: space-between;
   gap: 12px;
 }
-
-.skips { display: flex; align-items: center; gap: 12px; min-width: 0; }
-
-.pips { display: flex; gap: 5px; }
-.pips i {
-  display: block;
-  width: 24px;
-  height: 6px;
-  border-radius: 3px;
-  background: var(--accent);
-  transition: background 0.25s;
-}
-.pips i.used { background: var(--line); }
-.pips i.spend { animation: spend 0.35s ease; }
 
 .skips-label {
   color: var(--muted);
@@ -313,15 +346,15 @@ button { font: inherit; color: inherit; }
   padding: 10px 22px;
   border: 0;
   border-radius: 8px;
-  background: var(--light-btn);
-  color: var(--light-btn-fg);
+  background: var(--accent);
+  color: var(--on-accent);
   font-weight: 700;
   cursor: pointer;
-  transition: transform 0.12s, opacity 0.15s;
+  transition: transform 0.12s, background 0.15s;
 }
-.skip-btn:hover:not(:disabled) { background: #fff; }
+.skip-btn:hover:not(:disabled) { background: var(--accent-hi); }
 .skip-btn:active:not(:disabled) { transform: scale(0.96); }
-.skip-btn:disabled { opacity: 0.35; cursor: default; }
+.skip-btn:disabled { background: var(--raise); color: var(--faint); cursor: default; }
 
 /* ---------- Streamer picks ---------- */
 
@@ -459,7 +492,7 @@ button { font: inherit; color: inherit; }
   border: 0;
   border-radius: 9px;
   background: var(--accent);
-  color: #fff;
+  color: var(--on-accent);
   font-weight: 700;
   font-size: 15px;
   cursor: pointer;
@@ -572,15 +605,40 @@ a.who-name[href]:hover { text-decoration: underline; text-underline-offset: 4px;
   padding: 10px 20px 10px 16px;
   border: 0;
   border-radius: 999px;
-  background: var(--light-btn);
-  color: var(--light-btn-fg);
+  background: var(--accent);
+  color: var(--on-accent);
   font-weight: 700;
   cursor: pointer;
 }
-.replay-btn:hover { background: #fff; }
+.replay-btn:hover { background: var(--accent-hi); }
 
-.clip-link { color: var(--muted); font-size: 12.5px; }
-.clip-link:hover { color: var(--fg); }
+.player-bar {
+  margin-top: -6px;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px 16px;
+}
+.player-actions { flex: none; display: flex; align-items: center; gap: 14px; }
+
+.text-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 12px 6px 10px;
+  border: 1px solid var(--accent);
+  border-radius: 999px;
+  background: transparent;
+  color: var(--accent-text);
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+}
+.text-btn:hover { background: var(--accent); color: var(--on-accent); }
+
+.clip-link { color: var(--accent-text); font-size: 13px; font-weight: 600; text-decoration: none; }
+.clip-link:hover { text-decoration: underline; text-underline-offset: 3px; }
 
 .chat-small { border: 0; border-left: 1px solid var(--line); border-radius: 0; }
 /* Side by side, the chat takes the video's height instead of stretching the row. */
@@ -590,7 +648,9 @@ a.who-name[href]:hover { text-decoration: underline; text-underline-offset: 4px;
 .chat-small .emote { height: 24px; margin: -5px 1px; }
 
 .clip-title {
-  margin: -6px 0 0;
+  margin: 0;
+  min-width: 0;
+  flex: 1 1 260px;
   color: var(--muted);
   font-size: 13px;
   overflow-wrap: anywhere;
@@ -709,11 +769,16 @@ kbd {
       </div>
     </section>
 
-    <div class="controls">
-      <div class="skips">
-        <span class="pips" id="pips" aria-hidden="true"></span>
-        <span class="skips-label" id="skips-label"></span>
+    <div class="meter" aria-hidden="true">
+      <div class="meter-clip" id="meter-clip">
+        <div class="meter-open" id="meter-open"></div>
+        <div class="meter-fill" id="meter-fill"></div>
       </div>
+      <span class="meter-marker" id="meter-marker"></span>
+    </div>
+
+    <div class="controls">
+      <span class="skips-label" id="skips-label"></span>
       <button class="skip-btn" id="skip-btn" type="button" disabled>Skip</button>
     </div>
 
@@ -754,7 +819,6 @@ kbd {
               <svg viewBox="0 0 24 24" width="20" height="20" aria-hidden="true"><path d="M12 5V2L7 6l5 4V7a5 5 0 1 1-5 5H5a7 7 0 1 0 7-7z" fill="currentColor"/></svg>
               Replay
             </button>
-            <a class="clip-link" id="clip-link" target="_blank" rel="noopener" hidden>Watch the full clip on Twitch</a>
           </div>
         </div>
         <section class="chat chat-small" id="result-chat" aria-label="Chat replay" data-mode="idle">
@@ -762,7 +826,16 @@ kbd {
           <div class="chat-list"></div>
         </section>
       </div>
-      <p class="clip-title" id="clip-title"></p>
+      <div class="player-bar">
+        <p class="clip-title" id="clip-title"></p>
+        <div class="player-actions">
+          <button class="text-btn" id="replay-again" type="button">
+            <svg viewBox="0 0 24 24" width="16" height="16" aria-hidden="true"><path d="M12 5V2L7 6l5 4V7a5 5 0 1 1-5 5H5a7 7 0 1 0 7-7z" fill="currentColor"/></svg>
+            Replay
+          </button>
+          <a class="clip-link" id="clip-link" target="_blank" rel="noopener" hidden>Watch on Twitch</a>
+        </div>
+      </div>
 
       <div class="dist">
         <div class="dist-head"><span>Your guesses</span><span class="dist-note">by skips used</span></div>
@@ -800,9 +873,11 @@ kbd {
 // ===== Game settings: edit these numbers =====
 // Game settings. Change the numbers here; nothing else needs to change.
 window.GAME_CONFIG = {
-  // Seconds of chat the player can see: the first number is the start of the
-  // round, then one number for each skip. Must have (skips + 1) numbers.
-  revealSeconds: [5, 10, 15, 20, 30],
+  // Where the chat stops, in seconds from the start of the clip. The first
+  // number is what the player sees before any skip, then one number for each
+  // skip. 5 numbers = 4 skips. In a clip shorter than the last number, the last
+  // stop is the end of the clip.
+  revealSeconds: [1, 2, 4, 10, 30],
 
   // Points for a correct guess, by how many skips were used (0, 1, 2, 3, 4).
   points: [1000, 800, 600, 400, 200],
@@ -810,9 +885,10 @@ window.GAME_CONFIG = {
   // Points for a wrong guess.
   wrongPoints: 0,
 
-  // How many seconds of the clip (and its chat) play in the result window
-  // before it stops and shows Replay.
-  resultClipSeconds: 5,
+  // How the clip plays in the result window. 0 plays the whole clip.
+  // A number (for example 5) stops the clip and its chat after that many
+  // seconds and shows a Replay button.
+  resultClipSeconds: 0,
 
   // The Twitch player needs a moment to start after it loads. The chat next to
   // it waits this long (milliseconds) so the two line up. Raise it if the chat
@@ -894,7 +970,7 @@ window.SAMPLE_DATA = {"streamers":[{"login":"jynxzi","name":"Jynxzi","avatar":nu
     "#FF0000", "#0000FF", "#008000", "#B22222", "#FF7F50", "#9ACD32", "#FF4500", "#2E8B57",
     "#DAA520", "#D2691E", "#5F9EA0", "#1E90FF", "#FF69B4", "#8A2BE2", "#00FF7F",
   ];
-  const CHAT_BG = [31, 30, 36]; // matches --chat in style.css
+  const CHAT_BG = [24, 24, 27]; // matches --chat in style.css
   const colorCache = new Map();
 
   function hashName(name) {
@@ -1055,6 +1131,7 @@ window.SAMPLE_DATA = {"streamers":[{"login":"jynxzi","name":"Jynxzi","avatar":nu
       this.list.appendChild(welcome);
       this.stick = true;
       this.setMode("idle");
+      if (this.onProgress) this.onProgress(0);
     }
 
     // Play in real time from where the chat is now until `seconds`, then pause.
@@ -1076,6 +1153,7 @@ window.SAMPLE_DATA = {"streamers":[{"login":"jynxzi","name":"Jynxzi","avatar":nu
       this.last = now;
       this.head = Math.min(this.head + dt, this.target);
       this.flush();
+      if (this.onProgress) this.onProgress(this.head);
       if (this.head >= this.target) {
         this.raf = null;
         this.setMode("paused");
@@ -1227,6 +1305,51 @@ window.SAMPLE_DATA = {"streamers":[{"login":"jynxzi","name":"Jynxzi","avatar":nu
 
   const chat = new ChatView($("chat"));
   const replayChat = new ChatView($("result-chat"));
+  chat.onProgress = (head) => updateMeter(head);
+
+  // ---------- clip length and skip stops ----------
+
+  // Seconds of chat this clip has: the clip's length, or less if only part of
+  // its chat could be saved. Older saved clips without a length have 30 seconds.
+  function clipLength(clip) {
+    const chatTo = clip.chatTo || 30;
+    return clip.dur ? Math.min(clip.dur, chatTo) : chatTo;
+  }
+
+  // The stops in seconds, never past the end of the clip's chat.
+  function stopsFor(len) {
+    return cfg.revealSeconds.map((t) => Math.min(t, len));
+  }
+
+  // ---------- progress meter ----------
+  // The bar spans the round (up to the last stop); ticks mark where each skip stops.
+
+  function buildMeter(r) {
+    const clip = $("meter-clip");
+    clip.querySelectorAll(".meter-tick").forEach((el) => el.remove());
+    const span = r.stops[r.stops.length - 1];
+    for (const t of new Set(r.stops.slice(0, -1))) {
+      if (t >= span) continue;
+      const tick = document.createElement("i");
+      tick.className = "meter-tick";
+      tick.style.left = (t / span) * 100 + "%";
+      clip.appendChild(tick);
+    }
+    openMeter(0);
+    updateMeter(0);
+  }
+
+  function openMeter(stage) {
+    if (!round) return;
+    $("meter-open").style.width = (round.stops[stage] / round.span) * 100 + "%";
+  }
+
+  function updateMeter(head) {
+    if (!round) return;
+    const pct = Math.min(100, (head / round.span) * 100) + "%";
+    $("meter-fill").style.width = pct;
+    $("meter-marker").style.left = pct;
+  }
 
   // ---------- rounds ----------
 
@@ -1270,8 +1393,13 @@ window.SAMPLE_DATA = {"streamers":[{"login":"jynxzi","name":"Jynxzi","avatar":nu
 
       const correct = byLogin.get(login);
       const others = shuffle(data.streamers.filter((s) => s.login !== login)).slice(0, cfg.choices - 1);
+      const len = clipLength(clip);
+      const stops = stopsFor(len);
       return {
         clip,
+        len,
+        stops,
+        span: stops[stops.length - 1],
         correct,
         choices: shuffle([correct, ...others]),
         stage: 0,
@@ -1284,6 +1412,7 @@ window.SAMPLE_DATA = {"streamers":[{"login":"jynxzi","name":"Jynxzi","avatar":nu
   function showRound(r) {
     round = r;
     lastStreamer = r.correct.login;
+    buildMeter(r);
     chat.load(r.clip.messages);
     chat.pausedText = "Chat paused. Skip to see more.";
 
@@ -1305,7 +1434,7 @@ window.SAMPLE_DATA = {"streamers":[{"login":"jynxzi","name":"Jynxzi","avatar":nu
       wrap.appendChild(b);
     });
 
-    renderPips(0);
+    renderSkips(0);
     $("skip-btn").disabled = true;
     $("stat-round").textContent = fmt(session.round);
   }
@@ -1322,18 +1451,10 @@ window.SAMPLE_DATA = {"streamers":[{"login":"jynxzi","name":"Jynxzi","avatar":nu
     $("chat-start").hidden = true;
     $("choices").className = "choices live";
     $("skip-btn").disabled = MAX_SKIPS === 0;
-    chat.playUntil(cfg.revealSeconds[0]);
+    chat.playUntil(round.stops[0]);
   }
 
-  function renderPips(used, animateIndex) {
-    const pips = $("pips");
-    pips.textContent = "";
-    for (let i = 0; i < MAX_SKIPS; i++) {
-      const p = document.createElement("i");
-      if (i < used) p.className = "used";
-      if (i === animateIndex) p.classList.add("spend");
-      pips.appendChild(p);
-    }
+  function renderSkips(used) {
     const left = MAX_SKIPS - used;
     $("skips-label").textContent = left === 0 ? "No skips left" : left === 1 ? "1 skip left" : left + " skips left";
   }
@@ -1341,12 +1462,13 @@ window.SAMPLE_DATA = {"streamers":[{"login":"jynxzi","name":"Jynxzi","avatar":nu
   function skip() {
     if (!round || round.phase !== "playing" || round.stage >= MAX_SKIPS) return;
     round.stage++;
-    renderPips(round.stage, round.stage - 1);
+    renderSkips(round.stage);
+    openMeter(round.stage);
     if (round.stage >= MAX_SKIPS) {
       $("skip-btn").disabled = true;
       chat.pausedText = "That's all the chat. Make your guess.";
     }
-    chat.playUntil(cfg.revealSeconds[round.stage]);
+    chat.playUntil(round.stops[round.stage]);
   }
 
   function guess(login, button) {
@@ -1411,16 +1533,21 @@ window.SAMPLE_DATA = {"streamers":[{"login":"jynxzi","name":"Jynxzi","avatar":nu
   function playReveal() {
     clearReveal();
     const r = round;
-    const secs = cfg.resultClipSeconds;
+    const msgs = r.clip.messages;
+    // 0 plays the whole clip; a number stops clip and chat after that many seconds.
+    const limit = cfg.resultClipSeconds > 0 ? cfg.resultClipSeconds : 0;
+    const secs = limit || r.clip.chatTo || r.len;
     $("player-cover").hidden = true;
-    replayChat.load(r.clip.messages);
+    replayChat.load(msgs);
 
-    const finish = () => {
-      const frame = $("player-video").querySelector("iframe");
-      if (frame) frame.remove(); // stops the video and its sound
-      $("player-empty").hidden = true;
-      $("player-cover").hidden = false;
-    };
+    const finish = limit
+      ? () => {
+          const frame = $("player-video").querySelector("iframe");
+          if (frame) frame.remove(); // stops the video and its sound
+          $("player-empty").hidden = true;
+          $("player-cover").hidden = false;
+        }
+      : null;
 
     if (canEmbed()) {
       $("player-empty").hidden = true;
@@ -1557,6 +1684,7 @@ window.SAMPLE_DATA = {"streamers":[{"login":"jynxzi","name":"Jynxzi","avatar":nu
   $("skip-btn").addEventListener("click", skip);
   $("next-btn").addEventListener("click", nextRound);
   $("replay-btn").addEventListener("click", playReveal);
+  $("replay-again").addEventListener("click", playReveal);
   $("help-btn").addEventListener("click", openHelp);
   $("help-close").addEventListener("click", closeHelp);
   $("help").addEventListener("click", (e) => {
@@ -1594,7 +1722,7 @@ window.SAMPLE_DATA = {"streamers":[{"login":"jynxzi","name":"Jynxzi","avatar":nu
 
   async function init() {
     $("help-skips").textContent = MAX_SKIPS;
-    renderPips(0);
+    renderSkips(0);
     try {
       data = await GameData.load(cfg.dataPath);
     } catch (e) {
