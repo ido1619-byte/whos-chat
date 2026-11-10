@@ -1,6 +1,8 @@
 #!/usr/bin/env node
 // Collects fresh Twitch clips for the streamers in config.json and saves the
 // chat that was on screen during each clip, so the game can replay it forever.
+// Chatter names are swapped for made-up ones before anything is saved (see
+// "Chatter names" below); the streamers in config.json keep their real names.
 //
 //   node collector/collect.mjs              normal run (what GitHub runs every day)
 //   node collector/collect.mjs --dry        show what would be added, write nothing
@@ -313,8 +315,122 @@ function toParts(fragments, emotes) {
   return parts;
 }
 
+// ---------------------------------------------------------------------------
+// Chatter names
+//
+// Every chatter gets a made-up name, and every @mention is changed to match, so
+// the saved chat is not a public record of who wrote what. Names are random for
+// each clip: the same person gets a different name in a different clip. The
+// streamers in config.json and the bots in ignoreUsers keep their real names.
+
+const NAME_ADJ = [
+  "salty", "cosmic", "sleepy", "crispy", "frozen", "goofy", "lazy", "silent", "spicy", "tiny",
+  "big", "based", "rusty", "humble", "feral", "pixel", "night", "shadow", "soggy", "chill",
+  "lucky", "mighty", "quiet", "fuzzy", "hyper", "happy", "grumpy", "sneaky", "wild", "golden",
+  "icy", "turbo", "mega", "lil", "dr", "mr", "not", "its", "angry", "cracked",
+];
+const NAME_NOUN = [
+  "walrus", "penguin", "taco", "noodle", "goblin", "waffle", "otter", "pickle", "raccoon", "biscuit",
+  "mango", "yeti", "llama", "frog", "panda", "moose", "koala", "burrito", "toast", "ninja",
+  "pigeon", "cactus", "shrimp", "tater", "dingo", "bean", "viking", "wizard", "gremlin", "nugget",
+  "badger", "falcon", "lemur", "hamster", "pretzel", "muffin", "comet", "rocket", "pebble", "cobra",
+  "bagel", "donut", "squid", "turtle", "beetle", "sloth", "ferret", "walnut", "pancake", "gecko",
+];
+const NAME_TAG = ["tv", "gg", "lol", "irl", "yt", "fn", "plays", "main", "og", "x", "w"];
+
+function fakeName(rng) {
+  const pick = (list) => list[Math.floor(rng() * list.length)];
+  const cap = (s) => s[0].toUpperCase() + s.slice(1);
+  const num = () => String(Math.floor(rng() * (rng() < 0.5 ? 100 : 10000)));
+  const a = pick(NAME_ADJ);
+  const n = pick(NAME_NOUN);
+  switch (Math.floor(rng() * 6)) {
+    case 0: return a + n + num();
+    case 1: return cap(a) + cap(n);
+    case 2: return a + "_" + n;
+    case 3: return cap(a) + cap(n) + num();
+    case 4: return n + "_" + pick(NAME_TAG) + (rng() < 0.5 ? num() : "");
+    default: return (a + n).toUpperCase() + (rng() < 0.5 ? num() : "");
+  }
+}
+
+// Changes the names in one clip's messages (in place) and returns them.
+// `keep` holds lowercase names that stay as they are. A message may carry a
+// temporary `_login` (the chatter's Twitch login) so that mentions, which use
+// the login, get the same made-up name as the display name; it is removed here.
+export function anonymize(messages, keep = new Set(), rng = Math.random) {
+  const names = new Map();
+  const used = new Set(keep);
+  const nameFor = (real) => {
+    const key = String(real || "").toLowerCase();
+    if (!key || keep.has(key)) return null;
+    let fake = names.get(key);
+    if (!fake) {
+      do {
+        fake = fakeName(rng);
+      } while (used.has(fake.toLowerCase()));
+      used.add(fake.toLowerCase());
+      names.set(key, fake);
+    }
+    return fake;
+  };
+
+  // Chatters first, so a person's @mentions point at the name they post under.
+  for (const m of messages) {
+    const fake = nameFor(m._login || m.u);
+    if (fake) {
+      if (m._login) names.set(String(m.u).toLowerCase(), fake);
+      m.u = fake;
+    }
+    delete m._login;
+  }
+
+  // Then @mentions in the text (a mentioned person who did not chat gets a name too).
+  for (const m of messages) {
+    if (!Array.isArray(m.m)) continue;
+    m.m = m.m.map((part) =>
+      typeof part === "string"
+        ? part.replace(/@([A-Za-z0-9_]+)/g, (all, name) => {
+            const fake = nameFor(name);
+            return fake ? "@" + fake : all;
+          })
+        : part,
+    );
+  }
+  return messages;
+}
+
+// Names that are never changed: the streamers in the game and the known bots.
+function keptNames(cfg) {
+  return new Set(
+    [...(cfg.streamers || []), ...(cfg.ignoreUsers || [])].map((s) => String(s).toLowerCase().trim()).filter(Boolean),
+  );
+}
+
+// Swaps the names in clips that were saved before names were hidden.
+// Each file is changed once; it is marked with "anon": 1 afterwards.
+export async function anonymizeSavedClips(clipsDir, keep, { dry = false } = {}) {
+  let files;
+  try {
+    files = (await fs.readdir(clipsDir)).filter((f) => f.endsWith(".json"));
+  } catch (e) {
+    return 0;
+  }
+  let changed = 0;
+  for (const f of files) {
+    const file = path.join(clipsDir, f);
+    const rec = await readJSON(file, null);
+    if (!rec || rec.anon || !Array.isArray(rec.messages)) continue;
+    rec.messages = anonymize(rec.messages, keep);
+    rec.anon = 1;
+    changed++;
+    if (!dry) await fs.writeFile(file, JSON.stringify(rec));
+  }
+  return changed;
+}
+
 // Turns raw chat replay comments into the game's message format, with times in
-// seconds from the start of the clip.
+// seconds from the start of the clip, and with made-up chatter names.
 export function convertChat(nodes, clip, ctx) {
   const start = clip.vod_offset;
   // Twitch gives whole seconds. The send time (createdAt) adds the fraction, so
@@ -349,11 +465,12 @@ export function convertChat(nodes, clip, ctx) {
       .slice(0, 3);
     if (badges.length) entry.b = badges;
     entry._sent = Number.isFinite(sent) ? sent : 0;
+    entry._login = login;
     out.push(entry);
   }
   out.sort((a, b) => a.t - b.t || a._sent - b._sent);
   for (const m of out) delete m._sent;
-  return out;
+  return anonymize(out, ctx.keep || new Set());
 }
 
 // ---------------------------------------------------------------------------
@@ -447,7 +564,8 @@ export async function testClip(input, { log = console.log, root = path.resolve(H
   const messages = convertChat(nodes, clip, {
     emotes,
     badges: new Map(),
-    ignore: new Set(cfg.ignoreUsers || []),
+    ignore: new Set((cfg.ignoreUsers || []).map((u) => u.toLowerCase())),
+    keep: keptNames(cfg),
     chatSeconds: chatTo,
   });
   log(`Clip length ${clip.duration}s. ${messages.length} messages in ${chatTo} seconds of chat. First 15:`);
@@ -473,6 +591,13 @@ export async function collect({ root = path.resolve(HERE, ".."), dry = false, on
   const dataDir = path.join(root, "data");
   const clipsDir = path.join(dataDir, "clips");
   if (!dry) await fs.mkdir(clipsDir, { recursive: true });
+
+  const keep = keptNames(cfg);
+
+  // 0. Hide the chatter names in clips saved before names were hidden.
+  //    Needs no Twitch connection, so it runs first.
+  const renamed = await anonymizeSavedClips(clipsDir, keep, { dry });
+  if (renamed) log(`Hid the chatter names in ${renamed} saved clips.`);
 
   const helix = new Helix(...credentials());
   await helix.login();
@@ -545,7 +670,7 @@ export async function collect({ root = path.resolve(HERE, ".."), dry = false, on
       return undefined;
     }
     if (!nodes) return null;
-    return convertChat(nodes, clip, { emotes, badges, ignore, chatSeconds: chatTo });
+    return convertChat(nodes, clip, { emotes, badges, ignore, keep, chatSeconds: chatTo });
   }
 
   for (const login of logins) {
@@ -587,6 +712,7 @@ export async function collect({ root = path.resolve(HERE, ".."), dry = false, on
             const messages = await readChat(login, info, want, emotes, badges);
             if (messages && messages.length >= rec.messages.length) {
               rec.messages = messages;
+              rec.anon = 1;
               rec.chatTo = want;
               rec.vod = info.video_id;
               rec.vod_offset = info.vod_offset;
@@ -656,6 +782,7 @@ export async function collect({ root = path.resolve(HERE, ".."), dry = false, on
         dur: round1(clip.duration || 30),
         chatTo,
         collected: until.toISOString(),
+        anon: 1,
         messages,
       };
       if (!dry) await fs.writeFile(path.join(clipsDir, clip.id + ".json"), JSON.stringify(record));
@@ -670,16 +797,16 @@ export async function collect({ root = path.resolve(HERE, ".."), dry = false, on
   // 3. Keep each streamer under the cap by dropping their least viewed clips.
   let removedCap = 0;
   if (cfg.maxClipsPerStreamer) {
-    const keep = [];
+    const keepClips = [];
     for (const login of new Set(pool.map((c) => c.s))) {
       const mine = pool.filter((c) => c.s === login).sort((a, b) => b.v - a.v);
-      keep.push(...mine.slice(0, cfg.maxClipsPerStreamer));
+      keepClips.push(...mine.slice(0, cfg.maxClipsPerStreamer));
       for (const c of mine.slice(cfg.maxClipsPerStreamer)) {
         removedCap++;
         if (!dry) await fs.rm(path.join(clipsDir, c.id + ".json"), { force: true });
       }
     }
-    pool = keep;
+    pool = keepClips;
   }
 
   // 4. Forget rejections older than the lookback window (those clips are never fetched again anyway).
@@ -722,6 +849,7 @@ export async function collect({ root = path.resolve(HERE, ".."), dry = false, on
   log(
     `\nAdded ${added} clips. Saved the full chat for ${longer} older clips. ` +
       `Removed ${removedDeleted} deleted, ${removedLength} too short or too long, and ${removedCap} over the cap. ` +
+      (renamed ? `Hid chatter names in ${renamed} saved clips. ` : "") +
       `Pool: ${pool.length}.`,
   );
   if (outOfTime) log("Stopped at the time limit. The next run picks up where this one stopped.");
@@ -733,6 +861,7 @@ export async function collect({ root = path.resolve(HERE, ".."), dry = false, on
       "",
       `Added **${added}** clips. Saved the full chat for **${longer}** older clips. Pool: **${pool.length}**. ` +
         `Removed ${removedDeleted} deleted, ${removedLength} too short or too long, ${removedCap} over the cap.` +
+        (renamed ? ` Hid chatter names in ${renamed} saved clips.` : "") +
         (outOfTime ? " Stopped at the time limit; the next run continues." : ""),
       "",
       "| Streamer | Found | Added | No chat | Quiet | Full chat saved | In pool |",
