@@ -16,10 +16,10 @@ const LOSE_EMOTES = ["lose-1.webp", "lose-2.webp", "lose-3.webp", "lose-4.webp"]
 
 const CSS = `
 #result-head.gtc-emote-head {
-  padding: 22px 0 0;
+  padding: 16px 0 0;
   display: grid;
   justify-items: center;
-  gap: 16px;
+  gap: 12px;
   background: radial-gradient(ellipse 60% 70% at 50% 40%, rgba(47, 179, 107, 0.22), transparent 70%);
 }
 #result-head.gtc-emote-head.bad {
@@ -27,7 +27,7 @@ const CSS = `
 }
 #result-head.gtc-emote-head h2 {
   width: 100%;
-  padding: 14px 20px;
+  padding: 11px 20px;
   background: var(--good, #2fb36b);
 }
 #result-head.gtc-emote-head.bad h2 { background: var(--bad, #e2474f); }
@@ -44,11 +44,19 @@ const CSS = `
 }
 @keyframes gtc-emote-pop { from { transform: scale(0.4); opacity: 0; } }
 
-/* Smaller screens: keep room for the clip below. */
-@media (max-width: 520px), (max-height: 760px) {
-  .gtc-round-emote { height: 110px; }
-  #result-head.gtc-emote-head { padding-top: 16px; gap: 12px; }
+/* Room for the emote, so the whole window fits without scrolling:
+   on computers, "It was ..." and the Skips/Points/Streak boxes share one row,
+   and the "Your guesses" bars are a little thinner. */
+@media (min-width: 720px) {
+  #result .modal-body { grid-template-columns: minmax(0, 1fr) auto; }
+  #result .modal-body > * { grid-column: 1 / -1; }
+  #result .modal-body > .reveal { grid-column: 1; }
+  #result .modal-body > .result-stats { grid-column: 2; align-self: center; min-width: 300px; }
 }
+#result .modal-body { gap: 12px; padding-top: 16px; padding-bottom: 16px; }
+#result .modal-foot { padding-top: 12px; padding-bottom: 12px; }
+#result .dist-rows { gap: 3px; }
+#result .dist-bar { height: 16px; line-height: 16px; font-size: 11px; }
 
 @media (prefers-reduced-motion: reduce) {
   .gtc-round-emote { animation: none; }
@@ -93,7 +101,31 @@ if (result && head) {
     img.decoding = "async";
     img.onerror = () => img.remove();
     head.prepend(img);
+    fit();
   }
+
+  // Shrinks the emote (never below EMOTE_MIN) until the window fits the screen
+  // without scrolling. On a tall screen it stays at full size.
+  const EMOTE_MAX = 150;
+  const EMOTE_MIN = 64;
+  function fit() {
+    const img = head.querySelector(".gtc-round-emote");
+    const body = result.querySelector(".modal-body");
+    if (!img || !body || result.hidden) return;
+    img.style.height = EMOTE_MAX + "px";
+    for (let pass = 0; pass < 2; pass++) {
+      const extra = body.scrollHeight - body.clientHeight;
+      if (extra <= 0) break;
+      const now = img.offsetHeight || EMOTE_MAX; // offsetHeight ignores the pop animation's scale
+      img.style.height = Math.max(EMOTE_MIN, Math.floor(now - extra)) + "px";
+    }
+  }
+
+  let resizeTimer = null;
+  window.addEventListener("resize", () => {
+    clearTimeout(resizeTimer);
+    resizeTimer = setTimeout(fit, 120);
+  });
 
   // The game fills in the window and then shows it: add the emote at that moment.
   let wasHidden = result.hidden;
