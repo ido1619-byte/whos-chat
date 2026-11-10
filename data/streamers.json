@@ -1,4 +1,55 @@
 {
-  "updated": null,
-  "streamers": []
+  "updated": "2026-11-10T06:51:44.765Z",
+  "streamers": [
+    {
+      "login": "jynxzi",
+      "name": "Jynxzi",
+      "avatar": "https://static-cdn.jtvnw.net/jtv_user_pictures/645d98a0-a2eb-48a3-b687-cfbc55243e4a-profile_image-300x300.png"
+    },
+    {
+      "login": "ohnepixel",
+      "name": "ohnePixel",
+      "avatar": "https://static-cdn.jtvnw.net/jtv_user_pictures/5742b015-e6ed-4f7c-a1dd-87cd88fe1eb9-profile_image-300x300.png"
+    },
+    {
+      "login": "xqc",
+      "name": "xQc",
+      "avatar": "https://static-cdn.jtvnw.net/jtv_user_pictures/xqc-profile_image-9298dca608632101-300x300.jpeg"
+    },
+    {
+      "login": "kaicenat",
+      "name": "KaiCenat",
+      "avatar": "https://static-cdn.jtvnw.net/jtv_user_pictures/bf6a04cf-3f44-4986-8eed-5c36bfad542b-profile_image-300x300.png"
+    },
+    {
+      "login": "stableronaldo",
+      "name": "stableronaldo",
+      "avatar": "https://static-cdn.jtvnw.net/jtv_user_pictures/020d2ed3-c2f2-4d33-805f-92cf966a9c43-profile_image-300x300.png"
+    },
+    {
+      "login": "caseoh_",
+      "name": "caseoh_",
+      "avatar": "https://static-cdn.jtvnw.net/jtv_user_pictures/ef28ba12-c8ed-46d4-838b-a4c95ef5b469-profile_image-300x300.png"
+    },
+    {
+      "login": "jasontheween",
+      "name": "jasontheween",
+      "avatar": "https://static-cdn.jtvnw.net/jtv_user_pictures/a04be2b0-9cc1-403c-a4b0-47b32d1fe640-profile_image-300x300.png"
+    },
+    {
+      "login": "lacy",
+      "name": "Lacy",
+      "avatar": "https://static-cdn.jtvnw.net/jtv_user_pictures/48487d3b-e713-4a49-ad35-dec6ab7d690e-profile_image-300x300.png"
+    },
+    {
+      "login": "joe_bartolozzi",
+      "name": "Joe_Bartolozzi",
+      "avatar": "https://static-cdn.jtvnw.net/jtv_user_pictures/ddc5eac9-8234-4918-bf85-7c6e8db23401-profile_image-300x300.png"
+    },
+    {
+      "login": "clix",
+      "name": "Clix",
+      "avatar": "https://static-cdn.jtvnw.net/jtv_user_pictures/f700cd74-e74c-42a4-ba5b-18efb486eb92-profile_image-300x300.png"
+    }
+  ]
 }
