@@ -34,6 +34,10 @@ body.gtc-layout > .app {
 body.gtc-layout .top { margin-top: auto; }
 body.gtc-layout .gtc-footer { margin-top: auto; padding-top: 32px; }
 
+/* The play triangle sits in the exact middle of its circle
+   (the game nudged it 3px to the right). */
+body.gtc-layout .play-btn svg { margin-left: 0; }
+
 /* ----- top-right buttons ----- */
 .gtc-toolbar {
   flex: none;
@@ -167,7 +171,6 @@ body.gtc-layout .gtc-footer { margin-top: auto; padding-top: 32px; }
   background: var(--accent, #9147ff);
   color: #fff;
 }
-.gtc-help-play svg { margin-left: 2px; }
 .gtc-help-skip {
   flex: none;
   width: 66px;
