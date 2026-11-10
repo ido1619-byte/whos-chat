@@ -1,0 +1,54 @@
+name: Update sign-in files
+
+# Copies Firebase's sign-in helper files onto guessthechat.com, so "Sign in"
+# can open Google's sign-in page in the same tab and show guessthechat.com
+# instead of the Firebase address.
+# Run it once now, and again every few months to pick up Firebase's fixes:
+# Actions -> Update sign-in files -> Run workflow.
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  update:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v5
+
+      - name: Download the files from Firebase
+        run: |
+          set -euo pipefail
+          src="https://guess-the-chat-1f021.firebaseapp.com"
+          mkdir -p __/auth __/firebase
+          # GitHub Pages serves /__/auth/handler from handler.html, and the same for iframe.
+          for name in handler iframe; do
+            curl -fsSL "$src/__/auth/$name" -o "__/auth/$name.html"
+            curl -fsSL "$src/__/auth/$name.js" -o "__/auth/$name.js"
+          done
+          curl -fsSL "$src/__/auth/experiments.js" -o __/auth/experiments.js
+          # Only needed for email-link sign-in, which the game doesn't use.
+          curl -fsSL "$src/__/auth/links" -o __/auth/links.html || echo "links: skipped"
+          curl -fsSL "$src/__/auth/links.js" -o __/auth/links.js || echo "links.js: skipped"
+          if ! curl -fsSL "$src/__/firebase/init.json" -o __/firebase/init.json; then
+            echo "init.json is not on Firebase; writing it from the site's settings."
+            cat > __/firebase/init.json <<'EOF'
+          {"apiKey":"AIzaSyBVYaTSFmrT2cqyMUWuAuvDPBUo-qKgAqo","appId":"1:581480763764:web:69bc79da965e5103ba9c21","authDomain":"guess-the-chat-1f021.firebaseapp.com","messagingSenderId":"581480763764","projectId":"guess-the-chat-1f021","storageBucket":"guess-the-chat-1f021.firebasestorage.app"}
+          EOF
+          fi
+          ls -la __/auth __/firebase
+
+      - name: Save them to the site
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898341+github-actions[bot]@users.noreply.github.com"
+          git add __
+          if git diff --cached --quiet; then
+            echo "No changes."
+          else
+            git commit -m "Update Firebase sign-in files"
+            git push
+          fi
