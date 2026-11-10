@@ -38,7 +38,7 @@ body.gtc-layout .gtc-footer { margin-top: auto; padding-top: 32px; }
 .gtc-toolbar {
   flex: none;
   width: 100%;
-  max-width: 1100px;
+  max-width: 1500px;
   margin: 0 auto;
   display: flex;
   justify-content: flex-end;
@@ -50,12 +50,16 @@ body.gtc-layout .gtc-footer { margin-top: auto; padding-top: 32px; }
   flex: none;
   width: 46px;
   height: 46px;
+  display: inline-grid;
+  place-items: center;
+  padding: 0;
+  line-height: 1;
   font-size: 18px;
   cursor: pointer;
   transition: border-color 0.15s, color 0.15s;
 }
 .gtc-toolbar .icon-btn:hover { border-color: var(--faint, #53535f); color: var(--fg, #efeff1); }
-.gtc-toolbar .icon-btn svg { width: 20px; height: 20px; }
+.gtc-toolbar .icon-btn svg { display: block; width: 20px; height: 20px; }
 .gtc-toolbar #sound-btn { display: none; } /* sound is in Settings now */
 
 /* Signed out: the account button is just the words "Sign in".
