@@ -404,6 +404,7 @@ function settings(cfg) {
   return {
     maxChat: cfg.maxChatSeconds || 60,
     minDuration: cfg.minDurationSeconds || 0,
+    maxDuration: cfg.maxDurationSeconds || 60,
     firstSeconds: cfg.firstRevealSeconds || 1,
     minFirst: cfg.minMessagesInFirstReveal ?? 1,
     minMessages: cfg.minMessages || 0,
@@ -413,6 +414,13 @@ function settings(cfg) {
 
 // Seconds of chat to save for a clip: its whole length, up to the cap.
 const chatLengthFor = (clip, set) => Math.min(set.maxChat, round1(clip.duration || 30));
+
+// Clips must be inside the allowed length range. Twitch lengths are not exact
+// (a "30 second" clip can be 30.2), so allow half a second either way.
+const lengthOk = (clip, set) => {
+  const d = clip.duration || 30;
+  return d >= set.minDuration - 0.5 && d <= set.maxDuration + 0.5;
+};
 
 export async function testClip(input, { log = console.log, root = path.resolve(HERE, "..") } = {}) {
   const cfg = JSON.parse(await fs.readFile(path.join(root, "collector", "config.json"), "utf8"));
@@ -479,18 +487,22 @@ export async function collect({ root = path.resolve(HERE, ".."), dry = false, on
   const rejected = await readJSON(rejectedFile, {});
   let pool = (index.clips || []).filter((c) => c && c.id);
 
-  // 1. Drop clips that were deleted on Twitch (their video would not play).
+  // 1. Drop clips that were deleted on Twitch (their video would not play),
+  //    and clips outside the allowed length range.
   let removedDeleted = 0;
+  let removedLength = 0;
   let existing = null;
   if (pool.length) {
     existing = await helix.existingClips(pool.map((c) => c.id));
     if (existing) {
       const gone = pool.filter((c) => !existing.has(c.id));
-      for (const c of gone) {
+      const wrongLength = pool.filter((c) => existing.has(c.id) && !lengthOk(existing.get(c.id), set));
+      for (const c of [...gone, ...wrongLength]) {
         if (!dry) await fs.rm(path.join(clipsDir, c.id + ".json"), { force: true });
       }
       removedDeleted = gone.length;
-      pool = pool.filter((c) => existing.has(c.id));
+      removedLength = wrongLength.length;
+      pool = pool.filter((c) => existing.has(c.id) && lengthOk(existing.get(c.id), set));
       for (const c of pool) c.v = existing.get(c.id).view_count; // keep view counts current
     } else {
       log("! Could not check for deleted clips this run. Skipping that step.");
@@ -604,7 +616,7 @@ export async function collect({ root = path.resolve(HERE, ".."), dry = false, on
           !have.has(c.id) &&
           !rejected[c.id] &&
           c.view_count >= (cfg.minViews || 0) &&
-          (c.duration || 30) >= set.minDuration,
+          lengthOk(c, set),
       )
       .sort((a, b) => b.view_count - a.view_count);
 
@@ -709,7 +721,8 @@ export async function collect({ root = path.resolve(HERE, ".."), dry = false, on
   }
   log(
     `\nAdded ${added} clips. Saved the full chat for ${longer} older clips. ` +
-      `Removed ${removedDeleted} deleted and ${removedCap} over the cap. Pool: ${pool.length}.`,
+      `Removed ${removedDeleted} deleted, ${removedLength} too short or too long, and ${removedCap} over the cap. ` +
+      `Pool: ${pool.length}.`,
   );
   if (outOfTime) log("Stopped at the time limit. The next run picks up where this one stopped.");
   if (dry) log("Dry run: nothing was written.");
@@ -719,7 +732,7 @@ export async function collect({ root = path.resolve(HERE, ".."), dry = false, on
       `### Clip collection ${today}`,
       "",
       `Added **${added}** clips. Saved the full chat for **${longer}** older clips. Pool: **${pool.length}**. ` +
-        `Removed ${removedDeleted} deleted, ${removedCap} over the cap.` +
+        `Removed ${removedDeleted} deleted, ${removedLength} too short or too long, ${removedCap} over the cap.` +
         (outOfTime ? " Stopped at the time limit; the next run continues." : ""),
       "",
       "| Streamer | Found | Added | No chat | Quiet | Full chat saved | In pool |",
