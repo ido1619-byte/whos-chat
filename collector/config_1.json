@@ -1,0 +1,50 @@
+{
+  "streamers": [
+    "jynxzi",
+    "ohnepixel",
+    "xqc",
+    "kaicenat",
+    "stableronaldo",
+    "caseoh_",
+    "jasontheween",
+    "lacy",
+    "joe_bartolozzi",
+    "clix"
+  ],
+  "lookbackDays": 60,
+  "minViews": 1000,
+  "minViewsByStreamer": {
+    "jynxzi": 3000,
+    "kaicenat": 2000
+  },
+  "minClipAgeDays": 3,
+  "minDurationSeconds": 15,
+  "maxDurationSeconds": 25,
+  "startingClipsPerStreamer": 20,
+  "newClipsPerStreamerPerRun": 5,
+  "maxClipsPerStreamer": 400,
+  "maxClipPagesPerStreamer": 3,
+  "maxChatSeconds": 25,
+  "minMessages": 25,
+  "firstRevealSeconds": 1,
+  "minMessagesInFirstReveal": 1,
+  "maxRunMinutes": 30,
+  "ignoreUsers": [
+    "nightbot",
+    "streamelements",
+    "fossabot",
+    "moobot",
+    "streamlabs",
+    "sery_bot",
+    "wizebot",
+    "botrixoficial",
+    "kofistreambot",
+    "soundalerts",
+    "pokemoncommunitygame",
+    "streamstickers",
+    "commanderroot",
+    "blerp",
+    "tangiabot",
+    "lumiastream"
+  ]
+}
