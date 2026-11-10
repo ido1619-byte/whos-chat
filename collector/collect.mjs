@@ -397,8 +397,26 @@ function credentials() {
   return [id, secret];
 }
 
+const round1 = (n) => Math.round(n * 10) / 10;
+
+// Settings with defaults, so an older config.json keeps working.
+function settings(cfg) {
+  return {
+    maxChat: cfg.maxChatSeconds || 60,
+    minDuration: cfg.minDurationSeconds || 0,
+    firstSeconds: cfg.firstRevealSeconds || 1,
+    minFirst: cfg.minMessagesInFirstReveal ?? 1,
+    minMessages: cfg.minMessages || 0,
+    runMinutes: cfg.maxRunMinutes || 30,
+  };
+}
+
+// Seconds of chat to save for a clip: its whole length, up to the cap.
+const chatLengthFor = (clip, set) => Math.min(set.maxChat, round1(clip.duration || 30));
+
 export async function testClip(input, { log = console.log, root = path.resolve(HERE, "..") } = {}) {
   const cfg = JSON.parse(await fs.readFile(path.join(root, "collector", "config.json"), "utf8"));
+  const set = settings(cfg);
   const helix = new Helix(...credentials());
   await helix.login();
   const match = /(?:clips\.twitch\.tv\/(?:embed\?clip=)?|\/clip\/)([\w-]+)/.exec(input);
@@ -411,7 +429,8 @@ export async function testClip(input, { log = console.log, root = path.resolve(H
     log("This clip's VOD is gone, so its chat can no longer be read.");
     return;
   }
-  const nodes = await fetchChat(clip.video_id, clip.vod_offset, clip.vod_offset + cfg.chatSeconds);
+  const chatTo = chatLengthFor(clip, set);
+  const nodes = await fetchChat(clip.video_id, clip.vod_offset, clip.vod_offset + Math.ceil(chatTo));
   if (!nodes) {
     log("Twitch did not return the VOD for this clip.");
     return;
@@ -421,9 +440,9 @@ export async function testClip(input, { log = console.log, root = path.resolve(H
     emotes,
     badges: new Map(),
     ignore: new Set(cfg.ignoreUsers || []),
-    chatSeconds: cfg.chatSeconds,
+    chatSeconds: chatTo,
   });
-  log(`${messages.length} messages in the first ${cfg.chatSeconds} seconds. First 15:`);
+  log(`Clip length ${clip.duration}s. ${messages.length} messages in ${chatTo} seconds of chat. First 15:`);
   for (const m of messages.slice(0, 15)) {
     const text = m.m.map((p) => (typeof p === "string" ? p : "[" + p.e + "]")).join("");
     log(`  ${m.t.toFixed(2).padStart(6)}s  ${m.u}: ${text}`);
@@ -432,6 +451,17 @@ export async function testClip(input, { log = console.log, root = path.resolve(H
 
 export async function collect({ root = path.resolve(HERE, ".."), dry = false, only = null, log = console.log } = {}) {
   const cfg = JSON.parse(await fs.readFile(path.join(root, "collector", "config.json"), "utf8"));
+  const set = settings(cfg);
+  // Stop early and save, so GitHub's time limit never throws away a run's work.
+  const deadline = Date.now() + set.runMinutes * 60 * 1000;
+  let outOfTime = false;
+  const timeLeft = () => {
+    if (!outOfTime && Date.now() > deadline) {
+      outOfTime = true;
+      log(`! Reached the ${set.runMinutes} minute limit. Saving now; the next run continues.`);
+    }
+    return !outOfTime;
+  };
   const dataDir = path.join(root, "data");
   const clipsDir = path.join(dataDir, "clips");
   if (!dry) await fs.mkdir(clipsDir, { recursive: true });
@@ -451,8 +481,9 @@ export async function collect({ root = path.resolve(HERE, ".."), dry = false, on
 
   // 1. Drop clips that were deleted on Twitch (their video would not play).
   let removedDeleted = 0;
+  let existing = null;
   if (pool.length) {
-    const existing = await helix.existingClips(pool.map((c) => c.id));
+    existing = await helix.existingClips(pool.map((c) => c.id));
     if (existing) {
       const gone = pool.filter((c) => !existing.has(c.id));
       for (const c of gone) {
@@ -482,11 +513,80 @@ export async function collect({ root = path.resolve(HERE, ".."), dry = false, on
   let lastChatError = null;
   let chatBroken = false;
 
+  // Reads a clip's chat. Returns the messages, null if the VOD is gone, or
+  // undefined if Twitch's chat replay failed (counted, and retried next run).
+  async function readChat(login, clip, chatTo, emotes, badges) {
+    chatTries++;
+    let nodes;
+    try {
+      nodes = await fetchChat(clip.video_id, clip.vod_offset, clip.vod_offset + Math.ceil(chatTo));
+      failStreak = 0;
+    } catch (err) {
+      chatFails++;
+      failStreak++;
+      lastChatError = err;
+      log(`! ${login} ${clip.id}: ${err.message}`);
+      if (failStreak >= 3) {
+        chatBroken = true;
+        log("! Chat replay failed 3 times in a row. Stopping for this run.");
+      }
+      return undefined;
+    }
+    if (!nodes) return null;
+    return convertChat(nodes, clip, { emotes, badges, ignore, chatSeconds: chatTo });
+  }
+
   for (const login of logins) {
     const user = users.get(login);
     if (!user || (only && only !== login)) continue;
-    const row = { login, found: 0, added: 0, noChat: 0, quiet: 0 };
+    const row = { login, found: 0, added: 0, noChat: 0, quiet: 0, longer: 0 };
     summary.push(row);
+
+    let badges = null;
+    let emotes = null;
+    const loadExtras = async () => {
+      if (!badges) badges = new Map([...globalBadges, ...(await helix.badges(user.id))]);
+      if (!emotes) emotes = await channelEmotes(user.id, globals);
+    };
+
+    // 2a. Clips saved before chat covered the whole clip: save the rest of their chat.
+    if (existing) {
+      for (const c of pool.filter((p) => p.s === login)) {
+        if (chatBroken || !timeLeft()) break;
+        const info = existing.get(c.id);
+        if (!info) continue;
+        const file = path.join(clipsDir, c.id + ".json");
+        const rec = await readJSON(file, null);
+        if (!rec) continue;
+        const dur = round1(info.duration || 30);
+        const want = chatLengthFor(info, set);
+        const saved = rec.chatTo ?? 30; // older runs always saved 30 seconds
+        if (rec.dur === dur && saved >= want - 0.05) continue; // already complete
+
+        let changed = rec.dur !== dur;
+        rec.dur = dur;
+        if (saved >= want - 0.05) {
+          rec.chatTo = want;
+          changed = true;
+        } else {
+          rec.chatTo = saved;
+          if (info.video_id && info.vod_offset != null) {
+            await loadExtras();
+            const messages = await readChat(login, info, want, emotes, badges);
+            if (messages && messages.length >= rec.messages.length) {
+              rec.messages = messages;
+              rec.chatTo = want;
+              rec.vod = info.video_id;
+              rec.vod_offset = info.vod_offset;
+              row.longer++;
+              changed = true;
+            }
+            await sleep(120);
+          }
+        }
+        if (changed && !dry) await fs.writeFile(file, JSON.stringify(rec));
+      }
+    }
 
     let clips;
     try {
@@ -499,44 +599,34 @@ export async function collect({ root = path.resolve(HERE, ".."), dry = false, on
     const inPool = pool.filter((c) => c.s === login).length;
     const limit = Math.max(cfg.newClipsPerStreamerPerRun, (cfg.startingClipsPerStreamer || 0) - inPool);
     const candidates = clips
-      .filter((c) => !have.has(c.id) && !rejected[c.id] && c.view_count >= (cfg.minViews || 0))
+      .filter(
+        (c) =>
+          !have.has(c.id) &&
+          !rejected[c.id] &&
+          c.view_count >= (cfg.minViews || 0) &&
+          (c.duration || 30) >= set.minDuration,
+      )
       .sort((a, b) => b.view_count - a.view_count);
 
-    let badges = null;
-    let emotes = null;
     for (const clip of candidates) {
-      if (row.added >= limit || chatBroken) break;
+      if (row.added >= limit || chatBroken || !timeLeft()) break;
       if (!clip.video_id || clip.vod_offset == null) {
         row.noChat++; // VOD deleted, or the stream is still live; try again tomorrow
         continue;
       }
-      if (!badges) badges = new Map([...globalBadges, ...(await helix.badges(user.id))]);
-      if (!emotes) emotes = await channelEmotes(user.id, globals);
+      await loadExtras();
 
-      chatTries++;
-      let nodes;
-      try {
-        nodes = await fetchChat(clip.video_id, clip.vod_offset, clip.vod_offset + cfg.chatSeconds);
-        failStreak = 0;
-      } catch (err) {
-        chatFails++;
-        failStreak++;
-        lastChatError = err;
-        log(`! ${login} ${clip.id}: ${err.message}`);
-        if (failStreak >= 3) {
-          chatBroken = true;
-          log("! Chat replay failed 3 times in a row. Stopping for this run.");
-        }
-        continue;
-      }
-      if (!nodes) {
+      const chatTo = chatLengthFor(clip, set);
+      const messages = await readChat(login, clip, chatTo, emotes, badges);
+      if (messages === undefined) continue;
+      if (messages === null) {
         row.noChat++;
         continue;
       }
 
-      const messages = convertChat(nodes, clip, { emotes, badges, ignore, chatSeconds: cfg.chatSeconds });
-      const early = messages.filter((m) => m.t < 5).length;
-      if (messages.length < cfg.minMessages || early < cfg.minMessagesInFirst5Seconds) {
+      // The chat must have enough messages overall, and in the part shown before any skip.
+      const early = messages.filter((m) => m.t < set.firstSeconds).length;
+      if (messages.length < set.minMessages || early < set.minFirst) {
         row.quiet++;
         rejected[clip.id] = { why: "quiet chat", n: messages.length, on: today };
         continue;
@@ -551,6 +641,8 @@ export async function collect({ root = path.resolve(HERE, ".."), dry = false, on
         url: clip.url,
         vod: clip.video_id,
         vod_offset: clip.vod_offset,
+        dur: round1(clip.duration || 30),
+        chatTo,
         collected: until.toISOString(),
         messages,
       };
@@ -600,8 +692,9 @@ export async function collect({ root = path.resolve(HERE, ".."), dry = false, on
   }
 
   const added = summary.reduce((n, r) => n + r.added, 0);
+  const longer = summary.reduce((n, r) => n + r.longer, 0);
   log("");
-  log("streamer            found  added  no chat  quiet  in pool");
+  log("streamer            found  added  no chat  quiet  full chat  in pool");
   for (const r of summary) {
     const total = pool.filter((c) => c.s === r.login).length;
     log(
@@ -610,22 +703,30 @@ export async function collect({ root = path.resolve(HERE, ".."), dry = false, on
         String(r.added).padStart(7) +
         String(r.noChat).padStart(9) +
         String(r.quiet).padStart(7) +
+        String(r.longer).padStart(11) +
         String(total).padStart(9),
     );
   }
-  log(`\nAdded ${added} clips. Removed ${removedDeleted} deleted and ${removedCap} over the cap. Pool: ${pool.length}.`);
+  log(
+    `\nAdded ${added} clips. Saved the full chat for ${longer} older clips. ` +
+      `Removed ${removedDeleted} deleted and ${removedCap} over the cap. Pool: ${pool.length}.`,
+  );
+  if (outOfTime) log("Stopped at the time limit. The next run picks up where this one stopped.");
   if (dry) log("Dry run: nothing was written.");
 
   if (process.env.GITHUB_STEP_SUMMARY && !dry) {
     const md = [
       `### Clip collection ${today}`,
       "",
-      `Added **${added}** clips. Pool: **${pool.length}**. Removed ${removedDeleted} deleted, ${removedCap} over the cap.`,
+      `Added **${added}** clips. Saved the full chat for **${longer}** older clips. Pool: **${pool.length}**. ` +
+        `Removed ${removedDeleted} deleted, ${removedCap} over the cap.` +
+        (outOfTime ? " Stopped at the time limit; the next run continues." : ""),
       "",
-      "| Streamer | Found | Added | No chat | Quiet | In pool |",
-      "|---|---|---|---|---|---|",
+      "| Streamer | Found | Added | No chat | Quiet | Full chat saved | In pool |",
+      "|---|---|---|---|---|---|---|",
       ...summary.map(
-        (r) => `| ${r.login} | ${r.found} | ${r.added} | ${r.noChat} | ${r.quiet} | ${pool.filter((c) => c.s === r.login).length} |`,
+        (r) =>
+          `| ${r.login} | ${r.found} | ${r.added} | ${r.noChat} | ${r.quiet} | ${r.longer} | ${pool.filter((c) => c.s === r.login).length} |`,
       ),
     ].join("\n");
     await fs.appendFile(process.env.GITHUB_STEP_SUMMARY, md + "\n");
