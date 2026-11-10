@@ -429,6 +429,71 @@ button { font: inherit; color: inherit; }
   .stats { gap: 16px; }
 }
 
+/* ---------- Game summary (after the last round) ---------- */
+
+.board.over > :not(.summary) { display: none; }
+
+.summary { display: grid; gap: 8px; }
+.summary-rows { display: grid; gap: 8px; }
+
+.sum-row {
+  display: grid;
+  grid-template-columns: 2.5rem minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 10px;
+  min-height: 48px;
+  padding: 6px 14px;
+  border-radius: 8px;
+  background: var(--raise);
+  color: var(--on-accent);
+  font-weight: 700;
+  animation: rise 0.3s ease both;
+}
+.sum-row.good { background: var(--good); }
+.sum-row.bad { background: var(--bad); }
+.sum-num { font-variant-numeric: tabular-nums; opacity: 0.75; }
+.sum-who { display: flex; align-items: center; justify-content: center; gap: 9px; min-width: 0; }
+.sum-who .avatar { box-shadow: 0 0 0 2px rgba(255, 255, 255, 0.35); }
+.sum-name { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 15px; }
+.sum-detail { font-size: 13px; font-weight: 600; font-variant-numeric: tabular-nums; opacity: 0.9; }
+
+.summary-total {
+  margin: 18px 0 6px;
+  display: flex;
+  align-items: baseline;
+  justify-content: center;
+  gap: 10px;
+  color: var(--muted);
+}
+.summary-total strong {
+  font-family: var(--font-display);
+  font-weight: 800;
+  font-size: 34px;
+  color: var(--fg);
+  font-variant-numeric: tabular-nums;
+}
+
+.summary-actions {
+  justify-self: center;
+  width: min(100%, 420px);
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 12px;
+}
+
+.outline-btn {
+  width: 100%;
+  padding: 13px 20px;
+  border: 1px solid var(--line);
+  border-radius: 9px;
+  background: transparent;
+  color: var(--fg);
+  font-weight: 700;
+  font-size: 15px;
+  cursor: pointer;
+}
+.outline-btn:hover { border-color: var(--faint); background: var(--panel); }
+
 /* ---------- Overlays ---------- */
 
 .overlay {
@@ -791,6 +856,15 @@ kbd {
     </div>
 
     <div class="choices" id="choices" role="group" aria-label="Pick the streamer"></div>
+
+    <section class="summary" id="summary" aria-label="Game summary" hidden>
+      <div class="summary-rows" id="summary-rows"></div>
+      <p class="summary-total"><span>Total</span><strong id="summary-score">0</strong></p>
+      <div class="summary-actions">
+        <button class="primary-btn" id="share-btn" type="button">Share</button>
+        <button class="outline-btn" id="results-btn" type="button">Results</button>
+      </div>
+    </section>
   </main>
 </div>
 
@@ -864,6 +938,7 @@ kbd {
         <li>Press play and watch the chat.</li>
         <li>Pick the streamer you think it belongs to. The earlier you guess, the more points you get.</li>
         <li>Not sure yet? Skip to see more chat. You get <span id="help-skips">4</span> skips per round.</li>
+        <li>A game has <span id="help-rounds">5</span> rounds. After the last one you see your results.</li>
       </ol>
       <div class="help-keys">
         <span><kbd>1</kbd> to <kbd>4</kbd> pick a streamer</span>
@@ -887,6 +962,9 @@ window.GAME_CONFIG = {
   // skip. 5 numbers = 4 skips. In a clip shorter than the last number, the last
   // stop is the end of the clip.
   revealSeconds: [1, 2, 4, 10, 25],
+
+  // Rounds in one game. After the last one the summary screen opens.
+  roundsPerGame: 5,
 
   // Points for a correct guess, by how many skips were used (0, 1, 2, 3, 4).
   points: [1000, 800, 600, 400, 200],
@@ -1384,7 +1462,10 @@ window.SAMPLE_DATA = {"streamers":[{"login":"jynxzi","name":"Jynxzi","avatar":nu
   let data = null;
   let byLogin = new Map();
   let clipsByStreamer = new Map();
-  const session = { score: 0, round: 1, streak: 0 };
+  const ROUNDS = Math.max(1, cfg.roundsPerGame || 5);
+  const session = { score: 0, round: 1, streak: 0, history: [], over: false };
+  const roundLabel = () => session.round + "/" + ROUNDS;
+  const isLastRound = () => session.round >= ROUNDS;
   let round = null;
   let upcoming = null;
   let lastStreamer = null;
@@ -1522,7 +1603,7 @@ window.SAMPLE_DATA = {"streamers":[{"login":"jynxzi","name":"Jynxzi","avatar":nu
 
     renderSkips(0);
     $("skip-btn").disabled = true;
-    $("stat-round").textContent = fmt(session.round);
+    $("stat-round").textContent = roundLabel();
   }
 
   function showStartCover(text) {
@@ -1587,8 +1668,9 @@ window.SAMPLE_DATA = {"streamers":[{"login":"jynxzi","name":"Jynxzi","avatar":nu
     bump("stat-score", fmt(session.score));
     bump("stat-streak", fmt(session.streak));
 
+    session.history.push({ streamer: round.correct, correct, skips: round.stage, points });
     const result = { correct, points, picked: byLogin.get(login), stats };
-    upcoming = prepareRound().catch(() => null);
+    if (!isLastRound()) upcoming = prepareRound().catch(() => null);
     guessTimer = setTimeout(() => openResult(result), 650);
   }
 
@@ -1728,17 +1810,94 @@ window.SAMPLE_DATA = {"streamers":[{"login":"jynxzi","name":"Jynxzi","avatar":nu
     }
 
     renderDistribution(res.stats, res.correct ? r.stage : "miss");
+    // After the last round the summary is already waiting behind this window.
+    if (isLastRound()) showSummary();
+    $("next-btn").textContent = isLastRound() ? "Close" : "Next round";
     $("result").hidden = false;
     $("next-btn").focus({ preventScroll: true });
     playReveal();
+  }
+
+  // ---------- game summary ----------
+
+  function showSummary() {
+    session.over = true;
+    const rows = $("summary-rows");
+    rows.textContent = "";
+    session.history.forEach((h, i) => {
+      const row = document.createElement("div");
+      row.className = "sum-row " + (h.correct ? "good" : "bad");
+      row.style.animationDelay = i * 70 + "ms";
+
+      const num = document.createElement("span");
+      num.className = "sum-num";
+      num.textContent = i + 1;
+
+      const who = document.createElement("span");
+      who.className = "sum-who";
+      who.appendChild(avatar(h.streamer, 28));
+      const name = document.createElement("span");
+      name.className = "sum-name";
+      name.textContent = h.streamer.name;
+      who.appendChild(name);
+
+      const detail = document.createElement("span");
+      detail.className = "sum-detail";
+      detail.textContent = h.correct
+        ? (h.skips === 1 ? "1 skip" : h.skips + " skips") + "  +" + fmt(h.points)
+        : "Missed";
+
+      row.append(num, who, detail);
+      rows.appendChild(row);
+    });
+    $("summary-score").textContent = fmt(session.score);
+    $("summary").hidden = false;
+    document.querySelector(".board").classList.add("over");
+  }
+
+  function shareText() {
+    const right = session.history.filter((h) => h.correct).length;
+    const squares = session.history.map((h) => (h.correct ? "🟩" : "🟥")).join("");
+    const lines = ["Whose Chat " + right + "/" + session.history.length + "  " + fmt(session.score) + " pts", squares];
+    if (/^https?:$/.test(location.protocol)) lines.push(location.origin + location.pathname);
+    return lines.join("\n");
+  }
+
+  let shareTimer = null;
+  async function share() {
+    const btn = $("share-btn");
+    const text = shareText();
+    let ok = false;
+    try {
+      await navigator.clipboard.writeText(text);
+      ok = true;
+    } catch (e) {
+      // Older browsers: copy through a hidden text box.
+      const box = document.createElement("textarea");
+      box.value = text;
+      box.setAttribute("readonly", "");
+      box.style.position = "fixed";
+      box.style.opacity = "0";
+      document.body.appendChild(box);
+      box.select();
+      try {
+        ok = document.execCommand("copy");
+      } catch (err) {}
+      box.remove();
+    }
+    Sfx.click();
+    btn.textContent = ok ? "Copied" : "Could not copy";
+    clearTimeout(shareTimer);
+    shareTimer = setTimeout(() => (btn.textContent = "Share"), 1800);
   }
 
   async function nextRound() {
     if ($("result").hidden) return;
     clearReveal();
     $("result").hidden = true;
+    if (session.over) return; // the summary is showing
     session.round++;
-    $("stat-round").textContent = fmt(session.round);
+    $("stat-round").textContent = roundLabel();
     showStartCover("Loading chat");
     $("play-btn").disabled = true;
     let r = upcoming ? await upcoming : null;
@@ -1777,6 +1936,8 @@ window.SAMPLE_DATA = {"streamers":[{"login":"jynxzi","name":"Jynxzi","avatar":nu
   $("replay-btn").addEventListener("click", replay);
   $("replay-again").addEventListener("click", replay);
   $("help-btn").addEventListener("click", openHelp);
+  $("share-btn").addEventListener("click", share);
+  // Results does nothing yet.
 
   function renderSoundButton() {
     const btn = $("sound-btn");
@@ -1831,6 +1992,8 @@ window.SAMPLE_DATA = {"streamers":[{"login":"jynxzi","name":"Jynxzi","avatar":nu
 
   async function init() {
     $("help-skips").textContent = MAX_SKIPS;
+    $("help-rounds").textContent = ROUNDS;
+    $("stat-round").textContent = roundLabel();
     renderSkips(0);
     try {
       data = await GameData.load(cfg.dataPath);
