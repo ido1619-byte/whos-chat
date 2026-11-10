@@ -664,7 +664,9 @@ const CSS = `
 .gtc-msg.system { color: var(--muted, #adadb8); font-size: 13px; }
 .gtc-name { font-weight: 700; }
 .gtc-emote { height: 32px; width: auto; margin: -8px 1px; vertical-align: middle; }
-.gtc-msg.typed { opacity: 0; transform: translateY(6px); animation: gtc-pop 0.3s ease forwards; }
+/* Visible by default. The fade-in only runs where animations are allowed, so a
+   device with animations turned off still shows everything. */
+.gtc-msg.typed { animation: gtc-pop 0.3s ease both; }
 .gtc-msg.typed:nth-child(2) { animation-delay: 0.6s; }
 .gtc-msg.typed:nth-child(3) { animation-delay: 1.4s; }
 
@@ -685,8 +687,7 @@ const CSS = `
   font-weight: 500;
   font-size: 15px;
   cursor: pointer;
-  opacity: 0;
-  animation: gtc-up 0.3s ease 2s forwards;
+  animation: gtc-up 0.3s ease 2s both;
   transition: background 0.15s;
 }
 .gtc-google:hover:not(:disabled) { background: #1f1f21; }
@@ -698,8 +699,7 @@ const CSS = `
   text-align: center;
   color: var(--faint, #53535f);
   font-size: 12px;
-  opacity: 0;
-  animation: gtc-up 0.3s ease 2.2s forwards;
+  animation: gtc-up 0.3s ease 2.2s both;
 }
 .gtc-note a { color: var(--muted, #adadb8); }
 
@@ -744,7 +744,7 @@ const CSS = `
 
 @keyframes gtc-fade { from { opacity: 0; } }
 @keyframes gtc-rise { from { opacity: 0; transform: translateY(12px) scale(0.98); } }
-@keyframes gtc-pop { to { opacity: 1; transform: none; } }
+@keyframes gtc-pop { from { opacity: 0; transform: translateY(6px); } to { opacity: 1; transform: none; } }
 @keyframes gtc-up { from { opacity: 0; transform: translateY(4px); } to { opacity: 1; transform: none; } }
 
 @media (prefers-reduced-motion: reduce) {
