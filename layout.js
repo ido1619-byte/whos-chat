@@ -7,7 +7,9 @@
 // - The title and the game sit together in the middle of the screen.
 // - "How to play" is a short guide with pictures instead of a list.
 // - Settings: sound effects, animations and dark theme on or off.
-// - A click sound on every button, like the game's own buttons.
+// - A click sound on the buttons, like the game's own buttons (not on the top
+//   buttons or the windows' X).
+// - Every window opens and closes smoothly, over a lighter backdrop.
 //   (The light colors for "dark theme off" are in theme.js, loaded in <head>.)
 // The game itself is not changed; its own buttons keep working underneath.
 
@@ -307,6 +309,26 @@ html:not(.gtc-motion-off) .gtc-overlay .gtc-window {
   }
 }
 
+/* Closing: a copy of the window fades out (and sinks a little) on top of the page,
+   while the real window is already closed (see "windows close smoothly" below). */
+html body > .overlay.gtc-closing,
+html body > .gtc-overlay.gtc-closing {
+  pointer-events: none;
+  animation: gtc-win-out 0.26s ease forwards !important;
+}
+html body > .overlay.gtc-closing .modal,
+html body > .gtc-overlay.gtc-closing .gtc-window {
+  animation: gtc-win-sink 0.26s ease forwards !important;
+}
+@keyframes gtc-win-out { to { opacity: 0; } }
+@keyframes gtc-win-sink { to { opacity: 0; transform: translateY(10px) scale(0.98); } }
+@media (prefers-reduced-motion: reduce) {
+  html body > .overlay.gtc-closing .modal,
+  html body > .gtc-overlay.gtc-closing .gtc-window {
+    animation: gtc-win-out 0.26s ease forwards !important;
+  }
+}
+
 /* ----- phones ----- */
 @media (max-width: 440px) {
   .top-row .logo { font-size: clamp(34px, 8vw, 46px); }
@@ -518,8 +540,10 @@ function closeSettings() {
 // ----- click sound -----
 // The same short tick the game makes, on every button and switch on the page.
 // Buttons that already make their own sound are skipped, and mute applies.
+// The buttons at the top and the windows' X buttons make no sound at all.
 const OWN_SOUND =
   "#play-btn, #skip-btn, #share-btn, #replay-btn, #replay-again, #sound-btn, .choice, [data-set='sound']";
+const SILENT = ".gtc-toolbar button, .gtc-x, .gtc-close";
 let tickCtx = null;
 function tickSound() {
   const vol = (window.GAME_CONFIG && window.GAME_CONFIG.soundVolume) ?? 0.6;
@@ -547,7 +571,7 @@ document.addEventListener(
   (e) => {
     if (!e.isTrusted) return; // a click made by code (e.g. the help window's X), not the player
     const el = e.target instanceof Element ? e.target.closest("button, input[type='checkbox']") : null;
-    if (!el || el.disabled || el.closest(OWN_SOUND)) return;
+    if (!el || el.disabled || el.closest(OWN_SOUND) || el.closest(SILENT)) return;
     // "Next round" starts the next round, and the game plays its own tick for that.
     if (el.id === "next-btn" && el.textContent.trim() !== "Close") return;
     tickSound();
@@ -570,3 +594,81 @@ window.addEventListener(
   },
   true,
 );
+
+// ----- windows close smoothly -----
+// The game and the other scripts close a window at once (they turn on its
+// `hidden`). Right before that, a copy of the window is put on top of the page
+// and fades out, so closing looks as smooth as opening, while for the code the
+// real window is already closed. Off when "Animations" is turned off in Settings.
+const hiddenProp = Object.getOwnPropertyDescriptor(HTMLElement.prototype, "hidden");
+const WINDOW_SEL = ".overlay, .gtc-overlay";
+
+function fadeOutCopy(win) {
+  if (!motionOn() || !win.isConnected) return;
+  const box = win.querySelector(".modal, .gtc-window");
+  if (!box) return;
+  const copy = win.cloneNode(true);
+  const copyBox = copy.querySelector(".modal, .gtc-window");
+  const from = [box, ...box.querySelectorAll("*")];
+  const to = [copyBox, ...copyBox.querySelectorAll("*")];
+  const scrolls = [];
+  from.forEach((el, i) => {
+    const twin = to[i];
+    if (!twin) return;
+    if (el.scrollTop) scrolls.push([twin, el.scrollTop]);
+    if (el instanceof HTMLInputElement) twin.checked = el.checked;
+    // Players (the Twitch clip) become plain dark boxes, so nothing loads or plays again.
+    if (/^(IFRAME|VIDEO|AUDIO|CANVAS|OBJECT|EMBED)$/.test(el.tagName)) {
+      const r = el.getBoundingClientRect();
+      const stand = document.createElement("div");
+      stand.style.cssText = "width:" + r.width + "px;height:" + r.height + "px;background:#000";
+      twin.replaceWith(stand);
+    }
+  });
+  copy.removeAttribute("id");
+  copy.querySelectorAll("[id]").forEach((el) => el.removeAttribute("id"));
+  copy.setAttribute("aria-hidden", "true");
+  copy.inert = true;
+  copy.classList.add("gtc-closing");
+  document.body.appendChild(copy);
+  for (const [el, top] of scrolls) el.scrollTop = top;
+  let gone = false;
+  const remove = () => {
+    if (gone) return;
+    gone = true;
+    copy.remove();
+  };
+  copy.addEventListener("animationend", (e) => {
+    if (e.target === copy) remove();
+  });
+  setTimeout(remove, 600); // in case the animation doesn't run
+}
+
+function watchClosing(win) {
+  if (win.gtcWatched || win.classList.contains("gtc-closing")) return;
+  win.gtcWatched = true;
+  Object.defineProperty(win, "hidden", {
+    configurable: true,
+    get() {
+      return hiddenProp.get.call(this);
+    },
+    set(value) {
+      if (value && !hiddenProp.get.call(this)) {
+        try {
+          fadeOutCopy(this);
+        } catch (e) {}
+      }
+      hiddenProp.set.call(this, value);
+    },
+  });
+}
+
+document.querySelectorAll(WINDOW_SEL).forEach(watchClosing);
+// Windows added later (e.g. the Leaderboard).
+new MutationObserver((changes) => {
+  for (const change of changes) {
+    for (const node of change.addedNodes) {
+      if (node.nodeType === 1 && node.matches(WINDOW_SEL)) watchClosing(node);
+    }
+  }
+}).observe(document.body, { childList: true });
