@@ -39,7 +39,9 @@ const NAME_NOUN = [
   "bagel", "donut", "squid", "turtle", "beetle", "sloth", "ferret", "walnut", "pancake", "gecko",
 ]; // 50
 const NAME_TAG = ["tv", "gg", "lol", "irl", "yt", "fn", "plays", "main", "og", "x", "w"]; // 11
-const NAME_STYLES = 5;
+// Styles: 1 = SilentYeti4821, 2 = silent_yeti4821, 4 = yeti_gg4821.
+// (0 and 3 are older styles and now show like 1. The rules allow 0 to 4.)
+const NAME_STYLES = [1, 2, 4];
 // Chat name colors that read well on the dark background.
 const NAME_COLORS = [
   "#ff7f50", "#1e90ff", "#9acd32", "#ff69b4", "#daa520", "#5f9ea0",
@@ -54,9 +56,9 @@ function randomName() {
   return {
     a: r(NAME_ADJ.length),
     n: r(NAME_NOUN.length),
-    s: r(NAME_STYLES),
+    s: NAME_STYLES[r(NAME_STYLES.length)],
     t: r(NAME_TAG.length),
-    k: Math.random() < 0.5 ? r(100) : r(10000),
+    k: 1 + r(9999), // always a number, so two players rarely get the same name
   };
 }
 
@@ -68,11 +70,9 @@ function nameOf(e) {
   const k = int(e.k) > 0 ? String(int(e.k)) : ""; // 0 means no number
   if (!a || !n) return "player";
   switch (int(e.s)) {
-    case 0: return a + n + k;
-    case 1: return cap(a) + cap(n);
-    case 2: return a + "_" + n;
-    case 3: return cap(a) + cap(n) + k;
-    default: return n + "_" + t + k;
+    case 2: return a + "_" + n + k;
+    case 4: return n + "_" + t + k;
+    default: return cap(a) + cap(n) + k;
   }
 }
 
@@ -370,12 +370,7 @@ function init() {
       return;
     }
     if (!me) return;
-    const who = document.createElement("span");
-    who.className = "gtc-lb-who";
-    who.append("You play as ");
-    const b = document.createElement("b");
-    b.textContent = nameOf(me);
-    who.appendChild(b);
+    // The player's name is already in their purple row; only the button is needed.
     const reroll = document.createElement("button");
     reroll.type = "button";
     reroll.className = "gtc-lb-reroll";
@@ -391,7 +386,8 @@ function init() {
         acct.toast("Couldn't change the name. Please try again.");
       }
     });
-    foot.append(who, reroll);
+    reroll.title = "Get a new random name";
+    foot.append(reroll);
   }
 
   // ----- keeping the board up to date -----
