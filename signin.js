@@ -273,11 +273,12 @@ function init() {
       '<div class="gtc-banner"><img src="' + asset("hiii.gif") + '" alt=""></div>' +
       '<div class="gtc-body">' +
       '<h2 class="gtc-title" id="gtc-signin-title">Join the chat</h2>' +
+      '<p class="gtc-join-sub">Save your stats and see them on every device.</p>' +
       '<div class="gtc-chat">' +
       '<div class="gtc-msg system">Welcome to the chat room!</div>' +
-      '<div class="gtc-msg typed"><span class="gtc-name" style="color:#1e90ff">nightcactus48</span>: sign in so ur streak doesn\'t die ' +
+      '<div class="gtc-msg typed"><span class="gtc-name" style="color:#1e90ff">nightcactus48</span>: sign in so u never lose ur stats ' +
       '<img class="gtc-emote" src="' + asset("shout.webp") + '" alt="" title="shouting"></div>' +
-      '<div class="gtc-msg typed"><span class="gtc-name" style="color:#ff7f50">ChillMoose5832</span>: stats on every device ' +
+      '<div class="gtc-msg typed"><span class="gtc-name" style="color:#ff7f50">ChillMoose5832</span>: sync ur progress on all devices ' +
       '<img class="gtc-emote" src="' + asset("pogu.png") + '" alt="PogU" title="PogU"></div>' +
       "</div>" +
       '<button class="gtc-google" type="button" data-autofocus>' + ICON_GOOGLE + "<span>Continue with Google</span></button>" +
@@ -669,6 +670,7 @@ const CSS = `
 }
 .gtc-title.small { font-size: 22px; }
 .gtc-sub { margin: -6px 0 0; color: var(--muted, #adadb8); font-size: 13px; overflow-wrap: anywhere; }
+.gtc-join-sub { margin: -8px 0 0; text-align: center; color: var(--muted, #adadb8); font-size: 15px; line-height: 1.4; }
 .gtc-sync { margin: 4px 0 6px; color: var(--muted, #adadb8); font-size: 13px; }
 
 .gtc-chat {
