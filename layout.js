@@ -625,8 +625,8 @@ function fadeOutCopy(win) {
       twin.replaceWith(stand);
     }
   });
-  copy.removeAttribute("id");
-  copy.querySelectorAll("[id]").forEach((el) => el.removeAttribute("id"));
+  // The copy keeps its ids: some window styles use them (e.g. #help). The copy is
+  // last on the page, so the game still finds the real elements by id first.
   copy.setAttribute("aria-hidden", "true");
   copy.inert = true;
   copy.classList.add("gtc-closing");
