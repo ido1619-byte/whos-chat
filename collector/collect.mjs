@@ -1,6 +1,7 @@
 #!/usr/bin/env node
 // Collects fresh Twitch clips for the streamers in config.json and saves the
-// chat that was on screen during each clip, so the game can replay it forever.
+// chat that was on screen during each clip. A clip (and its chat) is removed
+// again once its full stream is no longer on Twitch.
 // Chatter names are swapped for made-up ones before anything is saved (see
 // "Chatter names" below); the streamers in config.json keep their real names.
 //
@@ -159,6 +160,35 @@ class Helix {
         for (const c of body.data || []) found.set(c.id, c);
       }
       return found;
+    } catch (e) {
+      return null;
+    }
+  }
+
+  // Returns the set of stream (VOD) ids that are no longer on Twitch, or null on error.
+  // Twitch answers 404 for a whole request if any one id is gone, so a group that
+  // gets 404 is split in half until the missing ones are found.
+  async missingVideos(ids) {
+    const missing = new Set();
+    const check = async (group) => {
+      try {
+        const body = await this.get("videos", group.map((id) => ["id", id]));
+        const found = new Set((body.data || []).map((v) => String(v.id)));
+        for (const id of group) if (!found.has(id)) missing.add(id);
+      } catch (e) {
+        if (e.status !== 404) throw e;
+        if (group.length === 1) {
+          missing.add(group[0]);
+          return;
+        }
+        const half = Math.ceil(group.length / 2);
+        await check(group.slice(0, half));
+        await check(group.slice(half));
+      }
+    };
+    try {
+      for (const group of chunks(ids, 100)) await check(group);
+      return missing;
     } catch (e) {
       return null;
     }
@@ -639,25 +669,19 @@ export async function collect({ root = path.resolve(HERE, ".."), dry = false, on
   let removedLength = 0;
   let removedStream = 0;
   let removedViews = 0;
+  let streamNote = "";
   let existing = null;
   if (pool.length) {
     existing = await helix.existingClips(pool.map((c) => c.id));
     if (existing) {
       const gone = pool.filter((c) => !existing.has(c.id));
       const wrongLength = pool.filter((c) => existing.has(c.id) && !lengthOk(existing.get(c.id), set));
-      // Twitch leaves video_id empty once the full stream (VOD) is no longer available.
-      const streamGone = pool.filter(
-        (c) => existing.has(c.id) && lengthOk(existing.get(c.id), set) && !existing.get(c.id).video_id,
-      );
-      for (const c of [...gone, ...wrongLength, ...streamGone]) {
+      for (const c of [...gone, ...wrongLength]) {
         if (!dry) await fs.rm(path.join(clipsDir, c.id + ".json"), { force: true });
       }
       removedDeleted = gone.length;
       removedLength = wrongLength.length;
-      removedStream = streamGone.length;
-      pool = pool.filter(
-        (c) => existing.has(c.id) && lengthOk(existing.get(c.id), set) && existing.get(c.id).video_id,
-      );
+      pool = pool.filter((c) => existing.has(c.id) && lengthOk(existing.get(c.id), set));
       for (const c of pool) c.v = existing.get(c.id).view_count; // keep view counts current
       // Below the views threshold (for example after it was raised): remove.
       // A removed clip can come back later if it gains views.
@@ -667,6 +691,34 @@ export async function collect({ root = path.resolve(HERE, ".."), dry = false, on
       }
       removedViews = fewViews.length;
       pool = pool.filter((c) => (c.v || 0) >= minViewsFor(c.s, set));
+
+      // The full stream (VOD) is gone from Twitch, so its chat is gone there too:
+      // remove the clip here as well. Each saved clip remembers its stream id.
+      const vodOf = new Map();
+      for (const c of pool) {
+        const rec = await readJSON(path.join(clipsDir, c.id + ".json"), null);
+        if (rec && rec.vod) vodOf.set(c.id, String(rec.vod));
+      }
+      const missing = vodOf.size ? await helix.missingVideos([...new Set(vodOf.values())]) : new Set();
+      if (!missing) {
+        streamNote = "Could not check which streams are gone this run.";
+        log("! " + streamNote);
+      } else {
+        const streamGone = pool.filter((c) => vodOf.has(c.id) && missing.has(vodOf.get(c.id)));
+        // Streams expire a few at a time. If Twitch suddenly says most are gone,
+        // something is off on Twitch's side: keep everything and try again next run.
+        if (streamGone.length > Math.max(5, pool.length / 2)) {
+          streamNote = `Twitch said ${streamGone.length} of ${pool.length} streams are gone, which looks wrong, so none were removed.`;
+          log("! " + streamNote);
+        } else {
+          for (const c of streamGone) {
+            if (!dry) await fs.rm(path.join(clipsDir, c.id + ".json"), { force: true });
+          }
+          removedStream = streamGone.length;
+          const goneIds = new Set(streamGone.map((c) => c.id));
+          pool = pool.filter((c) => !goneIds.has(c.id));
+        }
+      }
     } else {
       log("! Could not check for deleted clips this run. Skipping that step.");
     }
@@ -889,6 +941,7 @@ export async function collect({ root = path.resolve(HERE, ".."), dry = false, on
     `\nAdded ${added} clips. Saved the full chat for ${longer} older clips. ` +
       `Removed ${removedDeleted} deleted, ${removedStream} whose stream is gone from Twitch, ${removedLength} too short or too long, ${removedViews} with too few views, and ${removedCap} over the cap. ` +
       (renamed ? `Hid chatter names in ${renamed} saved clips. ` : "") +
+      (streamNote ? streamNote + " " : "") +
       `Pool: ${pool.length}.`,
   );
   if (outOfTime) log("Stopped at the time limit. The next run picks up where this one stopped.");
@@ -901,6 +954,7 @@ export async function collect({ root = path.resolve(HERE, ".."), dry = false, on
       `Added **${added}** clips. Saved the full chat for **${longer}** older clips. Pool: **${pool.length}**. ` +
         `Removed ${removedDeleted} deleted, ${removedStream} whose stream is gone from Twitch, ${removedLength} too short or too long, ${removedViews} with too few views, ${removedCap} over the cap.` +
         (renamed ? ` Hid chatter names in ${renamed} saved clips.` : "") +
+        (streamNote ? " " + streamNote : "") +
         (outOfTime ? " Stopped at the time limit; the next run continues." : ""),
       "",
       "| Streamer | Found | Added | No chat | Quiet | Full chat saved | In pool |",
