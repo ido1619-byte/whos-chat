@@ -17,7 +17,9 @@
   "minViews": 1000,
   "minViewsByStreamer": {
     "jynxzi": 3000,
-    "kaicenat": 2000
+    "kaicenat": 2000,
+    "plaqueboymax": 500,
+    "2xrakai": 500
   },
   "minClipAgeDays": 3,
   "minDurationSeconds": 15,
