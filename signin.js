@@ -528,11 +528,19 @@ function init() {
         clearTimeout(syncTimer);
         syncTimer = setTimeout(sync, 1200);
       } else if (summary && !summary.hidden && !user && !readJSON(KEY_PROMPTED, false)) {
-        // The player closed the last result of a game: offer sign-in once.
-        writeJSON(KEY_PROMPTED, true);
-        setTimeout(() => {
-          if (!user && !openWindow) openSignIn();
-        }, 500);
+        // The player closed the last result of a game: offer sign-in once, as soon
+        // as no other window (stats, help, settings) is open on top of the game.
+        let tries = 0;
+        const offer = () => {
+          if (user || openWindow || readJSON(KEY_PROMPTED, false)) return;
+          if (document.querySelector(".overlay:not([hidden])")) {
+            if (++tries < 120) setTimeout(offer, 500); // keep waiting up to a minute
+            return;
+          }
+          writeJSON(KEY_PROMPTED, true);
+          openSignIn();
+        };
+        setTimeout(offer, 500);
       }
     }).observe(result, { attributes: true, attributeFilter: ["hidden"] });
   }
