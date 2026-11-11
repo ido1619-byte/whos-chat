@@ -10,6 +10,7 @@
 //   - the "Join the chat" sign-in window (also shown once after a first game),
 //   - an account window (sign out, delete account),
 //   - a small footer with Terms, Privacy and Contact.
+// It also shares the sign-in with leaderboard.js, as window.gtcAccount.
 //
 // Images used here sit next to this file: hiii.gif, shout.webp, pogu.png.
 
@@ -262,8 +263,9 @@ function init() {
     el.hidden = !text;
   }
 
-  // The "Join the chat" window.
-  function openSignIn() {
+  // The "Join the chat" window. `opts.sub` replaces the line under the title.
+  function openSignIn(opts) {
+    const sub = (opts && opts.sub) || "Save your stats and see them on every device.";
     const win = document.createElement("div");
     win.className = "gtc-window";
     win.setAttribute("role", "dialog");
@@ -273,7 +275,7 @@ function init() {
       '<div class="gtc-banner"><img src="' + asset("hiii.gif") + '" alt=""></div>' +
       '<div class="gtc-body">' +
       '<h2 class="gtc-title" id="gtc-signin-title">Join the chat</h2>' +
-      '<p class="gtc-join-sub">Save your stats and see them on every device.</p>' +
+      '<p class="gtc-join-sub"></p>' +
       '<div class="gtc-chat">' +
       '<div class="gtc-msg system">Welcome to the chat room!</div>' +
       '<div class="gtc-msg typed"><span class="gtc-name" style="color:#1e90ff">nightcactus48</span>: sign in so u never lose ur stats ' +
@@ -287,6 +289,7 @@ function init() {
       '<a href="privacy.html">Privacy</a></p>' +
       "</div>";
     win.prepend(closeButton());
+    win.querySelector(".gtc-join-sub").textContent = sub;
     const google = win.querySelector(".gtc-google");
     google.addEventListener("click", () => signIn(win, google));
     showWindow(win);
@@ -366,6 +369,10 @@ function init() {
 
   // ----- Firebase -----
 
+  // Settles once it's known whether someone is signed in (or sign-in can't load).
+  let authKnown;
+  const authReady = new Promise((resolve) => (authKnown = resolve));
+
   const fbReady = (async () => {
     try {
       const base = "https://www.gstatic.com/firebasejs/" + FIREBASE_VERSION + "/";
@@ -388,11 +395,14 @@ function init() {
         deleteDoc: dbMod.deleteDoc,
         runTransaction: dbMod.runTransaction,
         serverTimestamp: dbMod.serverTimestamp,
+        store: dbMod, // all of Firestore, for leaderboard.js
       };
       authMod.onAuthStateChanged(fb.auth, (u) => {
         user = u || null;
         renderAccountButton();
         if (user) sync();
+        authKnown(user);
+        window.dispatchEvent(new CustomEvent("gtc:auth", { detail: { user } }));
       });
       // Coming back from Google's sign-in page.
       authMod
@@ -407,9 +417,21 @@ function init() {
       return fb;
     } catch (e) {
       console.warn("Guess the Chat: sign-in could not load", e);
+      authKnown(null);
       return null;
     }
   })();
+
+  // What leaderboard.js needs from here.
+  window.gtcAccount = {
+    ready: fbReady, // resolves to the Firebase pieces, or null
+    authReady, // resolves to the signed-in user, or null
+    get user() {
+      return user;
+    },
+    openSignIn,
+    toast,
+  };
 
   async function signIn(win, button) {
     showError(win, "");
@@ -451,6 +473,11 @@ function init() {
   async function deleteAccount() {
     const u = fb.auth.currentUser;
     if (!u) return;
+    try {
+      await fb.deleteDoc(fb.doc(fb.db, "leaderboard", u.uid)); // the player's leaderboard row
+    } catch (e) {
+      console.warn("Guess the Chat: could not remove the leaderboard row", e);
+    }
     await fb.deleteDoc(fb.doc(fb.db, "players", u.uid));
     try {
       await fb.deleteUser(u);
