@@ -159,8 +159,17 @@ body.gtc-layout .play-btn svg { margin-left: 0; }
   background: var(--raise, #26262c);
 }
 .gtc-help-meter span { position: absolute; top: 0; bottom: 0; left: 0; }
-.gtc-help-meter .open { width: 34%; background: var(--meter-open, #3b2768); }
+.gtc-help-meter .open { width: 40%; background: var(--meter-open, #3b2768); }
 .gtc-help-meter .fill { width: 14%; background: var(--accent, #9147ff); }
+/* the same dividers as the game's bar, one where each skip stops */
+.gtc-help-meter .tick {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  width: 2px;
+  margin-left: -1px;
+  background: var(--bg, #0e0e10);
+}
 .gtc-help-row {
   display: flex;
   align-items: center;
@@ -200,6 +209,8 @@ body.gtc-layout .play-btn svg { margin-left: 0; }
   background: hsl(20 38% 40%);
 }
 .gtc-help-faces i + i { margin-left: -12px; }
+.gtc-help-faces i { position: relative; overflow: hidden; }
+.gtc-help-faces img { display: block; width: 100%; height: 100%; object-fit: cover; }
 .gtc-help-faces i:nth-child(2) { background: hsl(200 38% 40%); }
 .gtc-help-faces i:nth-child(3) { background: hsl(300 38% 40%); }
 .gtc-help-row small { display: block; margin-top: 2px; color: var(--muted, #adadb8); font-size: 13px; }
@@ -353,6 +364,48 @@ if (helpModal && helpClose) {
     '<p class="gtc-help-foot"><button class="gtc-link" type="button">Sign in</button> to keep your stats on every device</p>';
   helpModal.prepend(box);
   helpModal.setAttribute("aria-labelledby", "gtc-help-title");
+
+  // Dividers like the game's own bar, from the game's skip times
+  // (the game bar spans the round, so the last stop is the end of the bar).
+  const meter = box.querySelector(".gtc-help-meter");
+  const secs = (window.GAME_CONFIG && window.GAME_CONFIG.revealSeconds) || [1, 2, 4, 10, 25];
+  const span = secs[secs.length - 1];
+  for (const t of secs.slice(0, -1)) {
+    const tick = document.createElement("span");
+    tick.className = "tick";
+    tick.style.left = (t / span) * 100 + "%";
+    meter.appendChild(tick);
+  }
+  // The unlocked part ends on a divider, as in the game (here: after 3 skips).
+  if (secs.length > 3) meter.querySelector(".open").style.width = (secs[3] / span) * 100 + "%";
+
+  // The three faces are streamers from the game (their Twitch pictures, as on the
+  // game's own buttons), three different ones each time the window opens.
+  // Until the list loads, or if a picture fails, the plain colored circle stays.
+  const faces = [...box.querySelectorAll(".gtc-help-faces i")];
+  let roster = null;
+  function showFaces() {
+    if (!roster || roster.length < faces.length) return;
+    const pool = roster.slice();
+    for (const face of faces) {
+      const s = pool.splice(Math.floor(Math.random() * pool.length), 1)[0];
+      face.textContent = "";
+      const img = document.createElement("img");
+      img.src = s.avatar;
+      img.alt = "";
+      img.decoding = "async";
+      img.onerror = () => img.remove();
+      face.appendChild(img);
+    }
+  }
+  const dataPath = (window.GAME_CONFIG && window.GAME_CONFIG.dataPath) || "data/";
+  fetch(dataPath + "streamers.json")
+    .then((r) => (r.ok ? r.json() : null))
+    .then((j) => {
+      roster = ((j && j.streamers) || []).filter((s) => s && typeof s.avatar === "string" && s.avatar.startsWith("https://"));
+      showFaces();
+    })
+    .catch(() => {});
   help.classList.add("gtc-help-ready");
 
   // The game writes the real numbers into its own window; copy them over.
@@ -365,6 +418,7 @@ if (helpModal && helpClose) {
     box.querySelector(".n-skips").textContent = gameNumber("#help-skips, .help-skips", 4);
     const signedIn = accountBtn && accountBtn.classList.contains("signed-in");
     box.querySelector(".gtc-help-foot").hidden = !accountBtn || signedIn;
+    showFaces();
   };
   refresh();
   new MutationObserver(() => {
