@@ -3,7 +3,7 @@
 // Added to index.html with one line, just before </body>, after signin.js:
 //   <script type="module" src="layout.js?v=3"></script>
 //
-// - The "?", settings and sign-in buttons sit at the top right of the page.
+// - The "?", stats, settings and sign-in buttons sit at the top right of the page.
 // - The title and the game sit together in the middle of the screen.
 // - "How to play" is a short guide with pictures instead of a list.
 // - Settings: sound effects, animations and dark theme on or off.
@@ -323,7 +323,7 @@ settingsBtn.innerHTML = ICON_GEAR;
 
 const bar = document.createElement("div");
 bar.className = "gtc-toolbar";
-for (const button of [soundBtn, helpBtn, settingsBtn, accountBtn]) {
+for (const button of [soundBtn, helpBtn, document.getElementById("stats-btn"), settingsBtn, accountBtn]) {
   if (button) bar.appendChild(button);
 }
 document.body.prepend(bar);
