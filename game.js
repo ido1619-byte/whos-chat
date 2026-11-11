@@ -2,7 +2,7 @@
 // results, the daily game and its countdown).
 //
 // Loaded from index.html with one line, after the game settings and sample data:
-//   <script src="game.js?v=3"></script>
+//   <script src="game.js?v=4"></script>
 // The game settings (GAME_CONFIG) stay in index.html.
 
 // Loads the clip pool. Uses the collected data in data/ when it exists,
@@ -339,6 +339,7 @@
   const KEY_PLAYED = "whosechat.played";
   const KEY_SOUND = "whosechat.sound";
   const KEY_DAILY = "gtc.daily";
+  const KEY_RECORD = "gtc.record"; // games played, best score, day streak
 
   // ---------- sounds ----------
   // Short tones made in the browser (no audio files): a tick for presses,
@@ -529,6 +530,19 @@
       done: session.history.length >= ROUNDS,
       current: current || null, // the round in progress: its clip and skips used
     });
+  }
+
+  // Counts a finished daily game: games played, best score and the day streak
+  // (days in a row with a finished game).
+  function recordGame() {
+    const rec = store.get(KEY_RECORD, {});
+    if (rec.lastDay === today) return; // today was already counted
+    rec.games = (rec.games || 0) + 1;
+    rec.bestScore = Math.max(rec.bestScore || 0, session.score);
+    rec.dayStreak = rec.lastDay === shiftDay(today, -1) ? (rec.dayStreak || 0) + 1 : 1;
+    rec.bestDayStreak = Math.max(rec.bestDayStreak || 0, rec.dayStreak);
+    rec.lastDay = today;
+    store.set(KEY_RECORD, rec);
   }
 
   let countdownTimer = null;
@@ -819,6 +833,7 @@
 
     session.history.push({ streamer: round.correct, correct, skips: round.stage, points });
     saveDaily(null);
+    if (session.history.length >= ROUNDS) recordGame();
     const result = { correct, points, picked: byLogin.get(login), stats };
     if (!isLastRound()) upcoming = prepareRound(session.round + 1).catch(() => null);
     guessTimer = setTimeout(() => openResult(result), 650);
@@ -897,8 +912,7 @@
     }
   }
 
-  function renderDistribution(stats, highlight) {
-    const rows = $("dist-rows");
+  function renderDistribution(stats, highlight, rows = $("dist-rows")) {
     rows.textContent = "";
     const values = [];
     for (let i = 0; i <= MAX_SKIPS; i++) values.push({ label: String(i), n: stats.dist[i] || 0, now: highlight === i });
@@ -1101,7 +1115,92 @@
   $("replay-again").addEventListener("click", replay);
   $("help-btn").addEventListener("click", openHelp);
   $("share-btn").addEventListener("click", share);
-  // Results does nothing yet.
+
+  // ---------- stats ----------
+  // A "Stats" button in the top bar (and the button next to Share at the end of
+  // a game) opens the player's stats.
+  const statsStyle = document.createElement("style");
+  statsStyle.textContent =
+    ".gtc-stats .modal{position:relative;max-width:440px;padding:30px 24px 22px;display:grid;gap:16px;overflow-y:auto}" +
+    ".stat-tiles{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:10px}" +
+    ".stat-tile{padding:14px 6px 12px;border-radius:12px;background:var(--bg);text-align:center}" +
+    ".stat-tile b{display:block;font-family:var(--font-display);font-size:26px;font-weight:800;line-height:1.1;color:var(--fg);font-variant-numeric:tabular-nums}" +
+    ".stat-tile span{display:block;margin-top:5px;font-size:12px;line-height:1.25;color:var(--muted)}" +
+    ".gtc-stats .dist{padding:14px 16px;border-radius:14px;background:var(--bg)}" +
+    ".stats-note{margin:0;text-align:center;color:var(--muted);font-size:14px}" +
+    ".stats-note:empty{display:none}" +
+    "@media (max-width:440px){.stat-tile b{font-size:22px}.gtc-stats .modal{padding:26px 16px 18px}}";
+  document.head.appendChild(statsStyle);
+
+  const statsBtn = document.createElement("button");
+  statsBtn.className = "icon-btn";
+  statsBtn.id = "stats-btn";
+  statsBtn.type = "button";
+  statsBtn.setAttribute("aria-label", "Stats");
+  statsBtn.title = "Stats";
+  statsBtn.innerHTML =
+    '<svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" aria-hidden="true"><path d="M6 20v-6M12 20V5M18 20v-10"/></svg>';
+  $("help-btn").after(statsBtn);
+
+  const statsBox = document.createElement("div");
+  statsBox.className = "overlay gtc-stats";
+  statsBox.id = "stats";
+  statsBox.hidden = true;
+  statsBox.innerHTML =
+    '<div class="modal" role="dialog" aria-modal="true" aria-labelledby="stats-title">' +
+    '<button class="gtc-x" id="stats-close" type="button" aria-label="Close">' +
+    '<svg viewBox="0 0 24 24" width="18" height="18" aria-hidden="true"><path d="M6 6l12 12M18 6L6 18" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"/></svg></button>' +
+    '<h2 class="gtc-title" id="stats-title">Stats</h2>' +
+    '<div class="stat-tiles" id="stat-tiles"></div>' +
+    '<div class="dist"><div class="dist-head"><span>Your guesses</span><span class="dist-note">by skips used</span></div>' +
+    '<div class="dist-rows" id="stats-dist"></div></div>' +
+    '<p class="stats-note" id="stats-note"></p>' +
+    "</div>";
+  document.body.appendChild(statsBox);
+
+  function openStats() {
+    const stats = store.get(KEY_STATS, { dist: [], miss: 0, best: 0 });
+    const rec = store.get(KEY_RECORD, {});
+    const right = (stats.dist || []).reduce((sum, n) => sum + (n || 0), 0);
+    const guesses = right + (stats.miss || 0);
+    // The day streak still counts if the last finished game was today or yesterday.
+    const dayStreak = rec.lastDay === today || rec.lastDay === shiftDay(today, -1) ? rec.dayStreak || 0 : 0;
+    const tiles = [
+      [fmt(rec.games || 0), "Played"],
+      [guesses ? Math.round((right / guesses) * 100) + "%" : "0%", "Correct"],
+      [fmt(rec.bestScore || 0), "Best score"],
+      [fmt(dayStreak), "Day streak"],
+      [fmt(rec.bestDayStreak || 0), "Best day streak"],
+      [fmt(stats.best || 0), "Best guess streak"],
+    ];
+    const box = $("stat-tiles");
+    box.textContent = "";
+    for (const [value, label] of tiles) {
+      const tile = document.createElement("div");
+      tile.className = "stat-tile";
+      const b = document.createElement("b");
+      b.textContent = value;
+      const span = document.createElement("span");
+      span.textContent = label;
+      tile.append(b, span);
+      box.appendChild(tile);
+    }
+    renderDistribution(stats, null, $("stats-dist"));
+    $("stats-note").textContent = guesses ? "" : "Play today's game to start your stats.";
+    statsBox.hidden = false;
+    $("stats-close").focus({ preventScroll: true });
+  }
+  function closeStats() {
+    statsBox.hidden = true;
+    statsBtn.focus({ preventScroll: true });
+  }
+  statsBtn.addEventListener("click", openStats);
+  $("stats-close").addEventListener("click", closeStats);
+  statsBox.addEventListener("click", (e) => {
+    if (e.target === statsBox) closeStats();
+  });
+  $("results-btn").textContent = "Stats";
+  $("results-btn").addEventListener("click", openStats);
 
   function renderSoundButton() {
     const btn = $("sound-btn");
@@ -1130,6 +1229,10 @@
     }
     if (!$("help").hidden) {
       if (e.key === "Escape") closeHelp();
+      return;
+    }
+    if (!statsBox.hidden) {
+      if (e.key === "Escape") closeStats();
       return;
     }
     if (!$("result").hidden) {
