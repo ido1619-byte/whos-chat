@@ -2,7 +2,7 @@
 // results, the daily game and its countdown).
 //
 // Loaded from index.html with one line, after the game settings and sample data:
-//   <script src="game.js?v=2"></script>
+//   <script src="game.js?v=3"></script>
 // The game settings (GAME_CONFIG) stay in index.html.
 
 // Loads the clip pool. Uses the collected data in data/ when it exists,
@@ -497,16 +497,20 @@
     } else {
       dailyPicks = [];
     }
-    // Five different streamers when there are enough of them.
+    // Never the same streamer twice in a row. With plenty of streamers, each one
+    // appears once; otherwise at most twice, so the last rounds can't be solved by
+    // crossing off the streamers that were already used.
     const streamers = new Set(dailyOrder.map((c) => c.s)).size;
-    const used = new Set(dailyPicks.map((c) => c.s));
+    const maxEach = streamers >= ROUNDS * 2 ? 1 : 2;
+    const count = new Map();
+    for (const c of dailyPicks) count.set(c.s, (count.get(c.s) || 0) + 1);
     for (const c of dailyOrder) {
       if (dailyPicks.length >= ROUNDS) break;
       if (dailyPicks.includes(c)) continue;
       const prev = dailyPicks[dailyPicks.length - 1];
-      if (streamers >= ROUNDS ? used.has(c.s) : prev && prev.s === c.s) continue;
+      if ((prev && prev.s === c.s) || (count.get(c.s) || 0) >= maxEach) continue;
       dailyPicks.push(c);
-      used.add(c.s);
+      count.set(c.s, (count.get(c.s) || 0) + 1);
     }
     for (const c of dailyOrder) {
       if (dailyPicks.length >= ROUNDS) break;
@@ -966,10 +970,21 @@
 
   // ---------- game summary ----------
 
+  // With many rounds the summary rows get slimmer, so everything fits on screen.
+  const compactStyle = document.createElement("style");
+  compactStyle.textContent =
+    ".summary-rows.compact{gap:6px}" +
+    ".summary-rows.compact .sum-row{min-height:36px;padding:3px 12px}" +
+    ".summary-rows.compact .sum-name{font-size:14px}" +
+    ".summary-rows.compact .avatar{--size:24px!important}" +
+    ".summary-rows.compact + .summary-total{margin-top:12px}";
+  document.head.appendChild(compactStyle);
+
   function showSummary() {
     session.over = true;
     const rows = $("summary-rows");
     rows.textContent = "";
+    rows.classList.toggle("compact", session.history.length > 6);
     session.history.forEach((h, i) => {
       const row = document.createElement("div");
       row.className = "sum-row " + (h.correct ? "good" : "bad");
