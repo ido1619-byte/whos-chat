@@ -632,9 +632,12 @@ export async function collect({ root = path.resolve(HERE, ".."), dry = false, on
   let pool = (index.clips || []).filter((c) => c && c.id);
 
   // 1. Drop clips that were deleted on Twitch (their video would not play),
+  //    clips whose full stream is gone from Twitch (so its chat is gone there too),
   //    clips outside the allowed length range, and clips with too few views.
+  //    New clips take their place in step 2.
   let removedDeleted = 0;
   let removedLength = 0;
+  let removedStream = 0;
   let removedViews = 0;
   let existing = null;
   if (pool.length) {
@@ -642,12 +645,19 @@ export async function collect({ root = path.resolve(HERE, ".."), dry = false, on
     if (existing) {
       const gone = pool.filter((c) => !existing.has(c.id));
       const wrongLength = pool.filter((c) => existing.has(c.id) && !lengthOk(existing.get(c.id), set));
-      for (const c of [...gone, ...wrongLength]) {
+      // Twitch leaves video_id empty once the full stream (VOD) is no longer available.
+      const streamGone = pool.filter(
+        (c) => existing.has(c.id) && lengthOk(existing.get(c.id), set) && !existing.get(c.id).video_id,
+      );
+      for (const c of [...gone, ...wrongLength, ...streamGone]) {
         if (!dry) await fs.rm(path.join(clipsDir, c.id + ".json"), { force: true });
       }
       removedDeleted = gone.length;
       removedLength = wrongLength.length;
-      pool = pool.filter((c) => existing.has(c.id) && lengthOk(existing.get(c.id), set));
+      removedStream = streamGone.length;
+      pool = pool.filter(
+        (c) => existing.has(c.id) && lengthOk(existing.get(c.id), set) && existing.get(c.id).video_id,
+      );
       for (const c of pool) c.v = existing.get(c.id).view_count; // keep view counts current
       // Below the views threshold (for example after it was raised): remove.
       // A removed clip can come back later if it gains views.
@@ -877,7 +887,7 @@ export async function collect({ root = path.resolve(HERE, ".."), dry = false, on
   }
   log(
     `\nAdded ${added} clips. Saved the full chat for ${longer} older clips. ` +
-      `Removed ${removedDeleted} deleted, ${removedLength} too short or too long, ${removedViews} with too few views, and ${removedCap} over the cap. ` +
+      `Removed ${removedDeleted} deleted, ${removedStream} whose stream is gone from Twitch, ${removedLength} too short or too long, ${removedViews} with too few views, and ${removedCap} over the cap. ` +
       (renamed ? `Hid chatter names in ${renamed} saved clips. ` : "") +
       `Pool: ${pool.length}.`,
   );
@@ -889,7 +899,7 @@ export async function collect({ root = path.resolve(HERE, ".."), dry = false, on
       `### Clip collection ${today}`,
       "",
       `Added **${added}** clips. Saved the full chat for **${longer}** older clips. Pool: **${pool.length}**. ` +
-        `Removed ${removedDeleted} deleted, ${removedLength} too short or too long, ${removedViews} with too few views, ${removedCap} over the cap.` +
+        `Removed ${removedDeleted} deleted, ${removedStream} whose stream is gone from Twitch, ${removedLength} too short or too long, ${removedViews} with too few views, ${removedCap} over the cap.` +
         (renamed ? ` Hid chatter names in ${renamed} saved clips.` : "") +
         (outOfTime ? " Stopped at the time limit; the next run continues." : ""),
       "",
