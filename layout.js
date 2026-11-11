@@ -7,6 +7,7 @@
 // - The title and the game sit together in the middle of the screen.
 // - "How to play" is a short guide with pictures instead of a list.
 // - Settings: sound effects, animations and dark theme on or off.
+// - A click sound on every button, like the game's own buttons.
 //   (The light colors for "dark theme off" are in theme.js, loaded in <head>.)
 // The game itself is not changed; its own buttons keep working underneath.
 
@@ -434,6 +435,46 @@ function closeSettings() {
   settings.hidden = true;
   settingsBtn.focus({ preventScroll: true });
 }
+
+// ----- click sound -----
+// The same short tick the game makes, on every button and switch on the page.
+// Buttons that already make their own sound are skipped, and mute applies.
+const OWN_SOUND =
+  "#play-btn, #skip-btn, #share-btn, #replay-btn, #replay-again, #sound-btn, .choice, [data-set='sound']";
+let tickCtx = null;
+function tickSound() {
+  const vol = (window.GAME_CONFIG && window.GAME_CONFIG.soundVolume) ?? 0.6;
+  if (!soundOn() || !(vol > 0)) return;
+  try {
+    const C = window.AudioContext || window.webkitAudioContext;
+    if (!C) return;
+    if (!tickCtx) tickCtx = new C();
+    if (tickCtx.state === "suspended") tickCtx.resume();
+    const t = tickCtx.currentTime;
+    const osc = tickCtx.createOscillator();
+    const gain = tickCtx.createGain();
+    osc.type = "sine";
+    osc.frequency.setValueAtTime(668, t);
+    gain.gain.setValueAtTime(0.0001, t);
+    gain.gain.exponentialRampToValueAtTime(0.16 * vol, t + 0.003);
+    gain.gain.exponentialRampToValueAtTime(0.0001, t + 0.035);
+    osc.connect(gain).connect(tickCtx.destination);
+    osc.start(t);
+    osc.stop(t + 0.065);
+  } catch (e) {}
+}
+document.addEventListener(
+  "click",
+  (e) => {
+    if (!e.isTrusted) return; // a click made by code (e.g. the help window's X), not the player
+    const el = e.target instanceof Element ? e.target.closest("button, input[type='checkbox']") : null;
+    if (!el || el.disabled || el.closest(OWN_SOUND)) return;
+    // "Next round" starts the next round, and the game plays its own tick for that.
+    if (el.id === "next-btn" && el.textContent.trim() !== "Close") return;
+    tickSound();
+  },
+  true,
+);
 
 settingsBtn.addEventListener("click", openSettings);
 settings.querySelector(".gtc-x").addEventListener("click", closeSettings);
