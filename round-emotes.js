@@ -1,7 +1,7 @@
 // Guess the Chat: a random emote in the result window after each round.
 //
 // Added to index.html with one line, just before </body>:
-//   <script type="module" src="round-emotes.js?v=1"></script>
+//   <script type="module" src="round-emotes.js?v=3"></script>
 //
 // The game itself is not changed. When the result window opens, this file puts
 // a big emote above the title and turns the colored header into a full-width
@@ -11,8 +11,8 @@
 // To add or remove emotes, edit the two lists below. The images sit next to
 // this file.
 
-const WIN_EMOTES = ["win-1.webp", "win-2.webp", "win-3.webp", "win-4.webp"];
-const LOSE_EMOTES = ["lose-1.webp", "lose-2.webp", "lose-3.webp", "lose-4.webp"];
+const WIN_EMOTES = ["win-1.webp", "win-2.webp", "win-3.webp", "win-4.webp", "win-5.webp"];
+const LOSE_EMOTES = ["lose-1.webp", "lose-2.webp", "lose-3.webp", "lose-4.webp", "lose-5.webp"];
 
 const CSS = `
 #result-head.gtc-emote-head {
