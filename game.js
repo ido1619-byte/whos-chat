@@ -2,7 +2,7 @@
 // results, the daily game and its countdown).
 //
 // Loaded from index.html with one line, after the game settings and sample data:
-//   <script src="game.js?v=1"></script>
+//   <script src="game.js?v=2"></script>
 // The game settings (GAME_CONFIG) stay in index.html.
 
 // Loads the clip pool. Uses the collected data in data/ when it exists,
@@ -658,6 +658,30 @@
     store.set(KEY_PLAYED, list.slice(-3000));
   }
 
+  // Messages that name the streamer give the answer away (for example a bot's
+  // "... gifting 5 subs to caseoh_'s community!"). They're hidden while guessing;
+  // the result window replays the clip with the full chat.
+  function namesOf(streamer) {
+    const names = new Set();
+    for (const raw of [streamer.login, streamer.name]) {
+      const n = String(raw || "").toLowerCase().replace(/\s+/g, "");
+      if (n.length >= 3) names.add(n);
+      const trimmed = n.replace(/^_+|_+$/g, "");
+      if (trimmed.length >= 3) names.add(trimmed);
+    }
+    return [...names];
+  }
+  function hideAnswer(messages, streamer) {
+    const names = namesOf(streamer);
+    return messages.filter((m) => {
+      const text = (m.m || [])
+        .filter((part) => typeof part === "string")
+        .join(" ")
+        .toLowerCase();
+      return !names.some((n) => text.includes(n));
+    });
+  }
+
   // Round n (1, 2, ...) of today's game. If its clip can't be loaded, the next
   // clip in today's order is used instead.
   async function prepareRound(n) {
@@ -673,6 +697,8 @@
       }
       const correct = byLogin.get(login);
       if (!clip || !clip.messages || !clip.messages.length || !correct) continue;
+      const guessMessages = hideAnswer(clip.messages, correct);
+      if (!guessMessages.length) continue;
 
       // The other streamers to pick from stay the same after a refresh.
       const rng = seeded(hash32(dailySeed + "|choices|" + meta.id));
@@ -681,6 +707,7 @@
       const stops = stopsFor(len);
       return {
         clip,
+        guessMessages,
         len,
         stops,
         span: stops[stops.length - 1],
@@ -697,7 +724,7 @@
     round = r;
     lastStreamer = r.correct.login;
     buildMeter(r);
-    chat.load(r.clip.messages);
+    chat.load(r.guessMessages);
 
     const wrap = $("choices");
     wrap.textContent = "";
