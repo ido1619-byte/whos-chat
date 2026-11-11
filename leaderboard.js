@@ -163,7 +163,6 @@ function init() {
     '<p class="gtc-lb-sub">Top players of all time</p>' +
     '<div class="gtc-lb-board" aria-live="polite"></div>' +
     '<div class="gtc-lb-foot"></div>' +
-    '<p class="gtc-lb-note">Points from daily games played while signed in, up to 10,000 a day.</p>' +
     "</div>";
   document.body.appendChild(box);
   const board = box.querySelector(".gtc-lb-board");
@@ -524,7 +523,6 @@ const CSS = `
   cursor: pointer;
 }
 .gtc-lb-join:hover { background: var(--accent-hi, #a970ff); }
-.gtc-lb-note { margin: -4px 0 0; text-align: center; color: var(--faint, #53535f); font-size: 12px; line-height: 1.4; }
 
 /* Chat name colors are picked for the dark theme; darken them a little in light. */
 html.gtc-light .gtc-lb-row:not(.me) .gtc-lb-name-text { filter: brightness(0.78) saturate(1.25); }
