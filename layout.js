@@ -6,13 +6,21 @@
 // - The "?", settings and sign-in buttons sit at the top right of the page.
 // - The title and the game sit together in the middle of the screen.
 // - "How to play" is a short guide with pictures instead of a list.
-// - Settings: sound effects and animations on or off.
+// - Settings: sound effects, animations and dark theme on or off.
+//   (The light colors for "dark theme off" are in theme.js, loaded in <head>.)
 // The game itself is not changed; its own buttons keep working underneath.
 
 const KEY_MOTION = "gtc.animations"; // "off" when animations are turned off
+const KEY_THEME = "gtc.theme"; // "light" when dark theme is turned off (read by theme.js)
 
 const ICON_GEAR =
   '<svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12.22 2h-.44a2 2 0 0 0-2 2v.18a2 2 0 0 1-1 1.73l-.43.25a2 2 0 0 1-2 0l-.15-.08a2 2 0 0 0-2.73.73l-.22.38a2 2 0 0 0 .73 2.73l.15.1a2 2 0 0 1 1 1.72v.51a2 2 0 0 1-1 1.74l-.15.09a2 2 0 0 0-.73 2.73l.22.38a2 2 0 0 0 2.73.73l.15-.08a2 2 0 0 1 2 0l.43.25a2 2 0 0 1 1 1.73V20a2 2 0 0 0 2 2h.44a2 2 0 0 0 2-2v-.18a2 2 0 0 1 1-1.73l.43-.25a2 2 0 0 1 2 0l.15.08a2 2 0 0 0 2.73-.73l.22-.39a2 2 0 0 0-.73-2.73l-.15-.08a2 2 0 0 1-1-1.74v-.5a2 2 0 0 1 1-1.74l.15-.09a2 2 0 0 0 .73-2.73l-.22-.38a2 2 0 0 0-2.73-.73l-.15.08a2 2 0 0 1-2 0l-.43-.25a2 2 0 0 1-1-1.73V4a2 2 0 0 0-2-2z"/><circle cx="12" cy="12" r="3"/></svg>';
+const ICON_SOUND =
+  '<svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M11 5 6 9H2v6h4l5 4V5z"/><path d="M15.54 8.46a5 5 0 0 1 0 7.07"/><path d="M19.07 4.93a10 10 0 0 1 0 14.14"/></svg>';
+const ICON_SPARKLE =
+  '<svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round" aria-hidden="true"><path d="M12 3l1.9 5.1L19 10l-5.1 1.9L12 17l-1.9-5.1L5 10l5.1-1.9z"/><path d="M19 15l.8 2.2L22 18l-2.2.8L19 21l-.8-2.2L16 18l2.2-.8z"/></svg>';
+const ICON_MOON =
+  '<svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"/></svg>';
 const ICON_X =
   '<svg viewBox="0 0 24 24" width="18" height="18" aria-hidden="true"><path d="M6 6l12 12M18 6L6 18" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"/></svg>';
 const ICON_PLAY =
@@ -228,6 +236,8 @@ body.gtc-layout .play-btn svg { margin-left: 0; }
   cursor: pointer;
 }
 .gtc-set-row + .gtc-set-row { border-top: 1px solid var(--line, #2f2f35); }
+.gtc-set-label { display: flex; align-items: center; gap: 12px; }
+.gtc-set-label svg { flex: none; color: var(--muted, #adadb8); }
 .gtc-switch {
   -webkit-appearance: none;
   appearance: none;
@@ -332,7 +342,7 @@ if (helpModal && helpClose) {
   box.innerHTML =
     '<button class="gtc-x" type="button" aria-label="Close">' + ICON_X + "</button>" +
     '<h2 class="gtc-title" id="gtc-help-title">How to Play</h2>' +
-    '<p class="gtc-help-sub">Read a Twitch chat and guess whose stream it&nbsp;is. <span class="n-rounds">5</span> rounds a game.</p>' +
+    '<p class="gtc-help-sub">Analyze the chat and guess the streamer.</p>' +
     '<div class="gtc-panel">' +
     '<div class="gtc-help-meter" aria-hidden="true"><span class="open"></span><span class="fill"></span></div>' +
     '<div class="gtc-help-row"><span class="gtc-help-play">' + ICON_PLAY + "</span><span>Play the chat</span></div>" +
@@ -351,7 +361,6 @@ if (helpModal && helpClose) {
     return n > 0 ? n : fallback;
   };
   const refresh = () => {
-    box.querySelector(".n-rounds").textContent = gameNumber("#help-rounds, .help-rounds", 5);
     box.querySelector(".n-skips").textContent = gameNumber("#help-skips, .help-skips", 4);
     const signedIn = accountBtn && accountBtn.classList.contains("signed-in");
     box.querySelector(".gtc-help-foot").hidden = !accountBtn || signedIn;
@@ -378,13 +387,16 @@ settings.innerHTML =
   '<button class="gtc-x" type="button" aria-label="Close">' + ICON_X + "</button>" +
   '<h2 class="gtc-title" id="gtc-settings-title">Settings</h2>' +
   '<div class="gtc-panel">' +
-  '<label class="gtc-set-row" data-row="sound"><span>Sound effects</span><input class="gtc-switch" type="checkbox" role="switch" data-set="sound"></label>' +
-  '<label class="gtc-set-row"><span>Animations</span><input class="gtc-switch" type="checkbox" role="switch" data-set="motion"></label>' +
+  '<label class="gtc-set-row" data-row="sound"><span class="gtc-set-label">' + ICON_SOUND + '<span>Sound effects</span></span><input class="gtc-switch" type="checkbox" role="switch" data-set="sound"></label>' +
+  '<label class="gtc-set-row"><span class="gtc-set-label">' + ICON_SPARKLE + '<span>Animations</span></span><input class="gtc-switch" type="checkbox" role="switch" data-set="motion"></label>' +
+  '<label class="gtc-set-row"><span class="gtc-set-label">' + ICON_MOON + '<span>Dark theme</span></span><input class="gtc-switch" type="checkbox" role="switch" data-set="theme"></label>' +
   "</div></div>";
 document.body.appendChild(settings);
 
 const soundSwitch = settings.querySelector('[data-set="sound"]');
 const motionSwitch = settings.querySelector('[data-set="motion"]');
+const themeSwitch = settings.querySelector('[data-set="theme"]');
+const darkOn = () => !document.documentElement.classList.contains("gtc-light");
 
 // Sound uses the game's own (now hidden) sound button, so the game keeps
 // remembering the choice, and the M key keeps working.
@@ -392,6 +404,7 @@ const soundOn = () => !(soundBtn && soundBtn.classList.contains("off"));
 const syncSettings = () => {
   soundSwitch.checked = soundOn();
   motionSwitch.checked = motionOn();
+  themeSwitch.checked = darkOn();
 };
 if (soundBtn) {
   new MutationObserver(syncSettings).observe(soundBtn, { attributes: true, attributeFilter: ["class"] });
@@ -406,6 +419,10 @@ soundSwitch.addEventListener("change", () => {
 motionSwitch.addEventListener("change", () => {
   writeKey(KEY_MOTION, motionSwitch.checked ? null : "off");
   applyMotion();
+});
+themeSwitch.addEventListener("change", () => {
+  document.documentElement.classList.toggle("gtc-light", !themeSwitch.checked);
+  writeKey(KEY_THEME, themeSwitch.checked ? null : "light");
 });
 
 function openSettings() {
