@@ -369,15 +369,65 @@ function init() {
     return li;
   }
 
+  // The top 3 on a podium: 1st in the middle and highest, 2nd on the left,
+  // 3rd on the right, each with a trophy. The player's own spot is purple.
+  function podium(rows, user) {
+    const box = document.createElement("ol");
+    box.className = "gtc-lb-podium";
+    for (let i = 0; i < 3; i++) {
+      const entry = rows[i];
+      const isMe = !!(entry && user && entry.id === user.uid);
+      const spot = document.createElement("li");
+      spot.className = "gtc-lb-spot p" + (i + 1) + (isMe ? " me" : "") + (entry ? "" : " empty");
+      const cup = document.createElement("span");
+      cup.className = "gtc-lb-cup";
+      cup.innerHTML = ICON_CUP;
+      const name = document.createElement("span");
+      name.className = "gtc-lb-spot-name";
+      const pts = document.createElement("span");
+      pts.className = "gtc-lb-spot-pts";
+      if (entry) {
+        // Long names may wrap onto a second line, at a word or before the number.
+        const full = nameOf(entry);
+        full.split(/(?<=[a-z])(?=[A-Z])|(?<=_)|(?<=\D)(?=\d)/).forEach((part, j) => {
+          if (j) name.appendChild(document.createElement("wbr"));
+          name.appendChild(document.createTextNode(part));
+        });
+        name.title = full;
+        if (!isMe) name.style.color = colorOf(entry);
+        pts.textContent = fmt(entry.points);
+      } else {
+        name.textContent = "—";
+        pts.textContent = "";
+      }
+      const step = document.createElement("span");
+      step.className = "gtc-lb-step";
+      step.textContent = i + 1;
+      spot.append(cup, name, pts);
+      if (isMe) {
+        const you = document.createElement("span");
+        you.className = "gtc-lb-you";
+        you.textContent = "You";
+        spot.appendChild(you);
+      }
+      spot.appendChild(step);
+      if (entry) spot.setAttribute("aria-label", (isMe ? "You, " : nameOf(entry) + ", ") + "place " + (i + 1) + ", " + fmt(entry.points) + " points");
+      box.appendChild(spot);
+    }
+    return box;
+  }
+
   function render({ rows, user, me, myRank }) {
     board.textContent = "";
     if (!rows.length && !me) {
       board.innerHTML = '<p class="gtc-lb-empty">No one is on the board yet. Sign in and play to be the first!</p>';
     } else {
+      board.appendChild(podium(rows, user));
       const list = document.createElement("ol");
       list.className = "gtc-lb-list";
-      rows.forEach((entry, i) => list.appendChild(row(entry, i + 1, !!user && entry.id === user.uid)));
-      board.appendChild(list);
+      list.start = 4;
+      rows.slice(3).forEach((entry, i) => list.appendChild(row(entry, i + 4, !!user && entry.id === user.uid)));
+      if (list.children.length) board.appendChild(list);
       if (me && myRank) {
         const gap = document.createElement("div");
         gap.className = "gtc-lb-gap";
@@ -467,6 +517,8 @@ const ICON_TROPHY =
   '<svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M7 4h10v5a5 5 0 0 1-10 0z"/><path d="M17 5h3v1.5A3.5 3.5 0 0 1 16.6 10M7 5H4v1.5A3.5 3.5 0 0 0 7.4 10"/><path d="M12 14v3.5M8.5 20.5h7M9.5 20.5c0-1.7 1.1-3 2.5-3s2.5 1.3 2.5 3"/></svg>';
 const ICON_X =
   '<svg viewBox="0 0 24 24" width="18" height="18" aria-hidden="true"><path d="M6 6l12 12M18 6L6 18" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"/></svg>';
+const ICON_CUP =
+  '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M7 3h10v6.2a5 5 0 0 1-10 0z" fill="currentColor"/><path d="M7 5.2H4.6v1.3a3.4 3.4 0 0 0 3.2 3.4M17 5.2h2.4v1.3a3.4 3.4 0 0 1-3.2 3.4" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/><rect x="11" y="13.6" width="2" height="3.6" fill="currentColor"/><rect x="7.6" y="17.2" width="8.8" height="3.2" rx="1" fill="currentColor"/></svg>';
 const ICON_DICE =
   '<svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round" aria-hidden="true"><rect x="4" y="4" width="16" height="16" rx="3.5"/><circle cx="9" cy="9" r="1.2" fill="currentColor" stroke="none"/><circle cx="15" cy="15" r="1.2" fill="currentColor" stroke="none"/><circle cx="15" cy="9" r="1.2" fill="currentColor" stroke="none"/><circle cx="9" cy="15" r="1.2" fill="currentColor" stroke="none"/></svg>';
 
@@ -519,6 +571,54 @@ const CSS = `
   letter-spacing: 0.05em;
   text-transform: uppercase;
 }
+/* ----- podium (top 3) ----- */
+.gtc-lb-podium {
+  list-style: none;
+  margin: 0;
+  padding: 14px 4px 0;
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  align-items: end;
+  gap: 6px;
+}
+.gtc-lb-spot { min-width: 0; display: flex; flex-direction: column; align-items: center; gap: 2px; text-align: center; }
+.gtc-lb-spot.p1 { grid-column: 2; grid-row: 1; --medal: #f5c542; }
+.gtc-lb-spot.p2 { grid-column: 1; grid-row: 1; --medal: #c9ced6; }
+.gtc-lb-spot.p3 { grid-column: 3; grid-row: 1; --medal: #d9925b; }
+.gtc-lb-cup { display: block; width: 26px; height: 26px; margin-bottom: 4px; color: var(--medal); }
+.gtc-lb-spot.p1 .gtc-lb-cup { width: 38px; height: 38px; }
+.gtc-lb-cup svg { display: block; width: 100%; height: 100%; }
+.gtc-lb-spot-name {
+  max-width: 100%;
+  overflow-wrap: anywhere;
+  font-weight: 700;
+  font-size: 14px;
+  line-height: 1.25;
+}
+.gtc-lb-spot.p1 .gtc-lb-spot-name { font-size: 15px; }
+.gtc-lb-spot-pts { color: var(--muted, #adadb8); font-size: 13px; font-weight: 600; font-variant-numeric: tabular-nums; }
+.gtc-lb-spot .gtc-lb-you { margin-top: 2px; }
+.gtc-lb-step {
+  width: 100%;
+  margin-top: 8px;
+  display: grid;
+  place-items: center;
+  border-radius: 10px 10px 0 0;
+  background: var(--raise, #26262c);
+  color: var(--medal);
+  font-family: var(--font-display, "Bricolage Grotesque", system-ui, sans-serif);
+  font-weight: 800;
+  font-size: 26px;
+  line-height: 1;
+}
+.gtc-lb-spot.p1 .gtc-lb-step { height: 76px; font-size: 34px; }
+.gtc-lb-spot.p2 .gtc-lb-step { height: 54px; }
+.gtc-lb-spot.p3 .gtc-lb-step { height: 42px; }
+.gtc-lb-spot.me .gtc-lb-step { background: var(--accent, #9147ff); color: var(--on-accent, #fff); }
+.gtc-lb-spot.me .gtc-lb-you { background: var(--accent, #9147ff); color: var(--on-accent, #fff); }
+.gtc-lb-spot.empty .gtc-lb-cup { opacity: 0.3; }
+.gtc-lb-spot.empty .gtc-lb-spot-name { color: var(--faint, #53535f); }
+.gtc-lb-podium + .gtc-lb-list { margin-top: 8px; padding-top: 6px; border-top: 1px solid var(--line, #2f2f35); }
 .gtc-lb-gap { padding: 4px 0 2px; text-align: center; color: var(--faint, #53535f); letter-spacing: 4px; line-height: 1; }
 .gtc-lb-empty { margin: 0; padding: 28px 14px; text-align: center; color: var(--muted, #adadb8); font-size: 14px; line-height: 1.5; }
 .gtc-lb-skel .gtc-lb-rank { color: var(--faint, #53535f); }
@@ -559,6 +659,10 @@ const CSS = `
 }
 .gtc-lb-join:hover { background: var(--accent-hi, #a970ff); }
 
+html.gtc-light .gtc-lb-spot.p1 { --medal: #c48f00; }
+html.gtc-light .gtc-lb-spot.p2 { --medal: #858c97; }
+html.gtc-light .gtc-lb-spot.p3 { --medal: #b0662c; }
+html.gtc-light .gtc-lb-spot:not(.me) .gtc-lb-spot-name { filter: brightness(0.78) saturate(1.25); }
 /* Chat name colors are picked for the dark theme; darken them a little in light. */
 html.gtc-light .gtc-lb-row:not(.me) .gtc-lb-name-text { filter: brightness(0.78) saturate(1.25); }
 html.gtc-light .gtc-lb-row:not(.me) .gtc-lb-rank.r1 { color: #c48f00; }
