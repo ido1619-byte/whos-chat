@@ -279,6 +279,34 @@ body.gtc-layout .play-btn svg { margin-left: 0; }
 .gtc-switch:checked::before { transform: translateX(18px); background: #fff; }
 .gtc-switch:focus-visible { outline: 2px solid var(--accent-hi, #a970ff); outline-offset: 2px; }
 
+/* ----- windows (every one: game, stats, settings, leaderboard, sign-in) ----- */
+/* A lighter backdrop, so the page still shows behind a window. */
+html:not(.gtc-light) { --scrim: rgba(0, 0, 0, 0.45); }
+html.gtc-light { --scrim: rgba(14, 14, 16, 0.32); }
+
+/* Windows open smoothly: the backdrop fades in, the window fades in and rises.
+   (Off when "Animations" is turned off in Settings.) */
+html:not(.gtc-motion-off) .overlay,
+html:not(.gtc-motion-off) .gtc-overlay {
+  animation: gtc-win-fade 0.28s ease both;
+}
+html:not(.gtc-motion-off) .overlay .modal,
+html:not(.gtc-motion-off) .gtc-overlay .gtc-window {
+  animation: gtc-win-rise 0.34s cubic-bezier(0.2, 0.8, 0.25, 1) both;
+}
+@keyframes gtc-win-fade { from { opacity: 0; } }
+@keyframes gtc-win-rise { from { opacity: 0; transform: translateY(14px) scale(0.97); } }
+/* When the device asks for less motion (e.g. Windows animations turned off),
+   windows still fade in, just without moving. */
+@media (prefers-reduced-motion: reduce) {
+  html:not(.gtc-motion-off) .overlay,
+  html:not(.gtc-motion-off) .gtc-overlay,
+  html:not(.gtc-motion-off) .overlay .modal,
+  html:not(.gtc-motion-off) .gtc-overlay .gtc-window {
+    animation: gtc-win-fade 0.28s ease both !important;
+  }
+}
+
 /* ----- phones ----- */
 @media (max-width: 440px) {
   .top-row .logo { font-size: clamp(34px, 8vw, 46px); }
@@ -317,6 +345,7 @@ document.head.appendChild(noMotion);
 const motionOn = () => readKey(KEY_MOTION) !== "off";
 const applyMotion = () => {
   noMotion.textContent = motionOn() ? "" : NO_MOTION_CSS;
+  document.documentElement.classList.toggle("gtc-motion-off", !motionOn());
 };
 applyMotion();
 
