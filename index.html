@@ -494,6 +494,25 @@ button { font: inherit; color: inherit; }
 }
 .outline-btn:hover { border-color: var(--faint); background: var(--panel); }
 
+/* "Come back in" countdown to the next daily game */
+.next-game {
+  margin: 14px 0 0;
+  text-align: center;
+  color: var(--muted);
+  font-size: 13px;
+  font-weight: 600;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+.next-game strong {
+  margin-left: 8px;
+  color: var(--fg);
+  font-size: 15px;
+  letter-spacing: 0.04em;
+  font-variant-numeric: tabular-nums;
+}
+.next-game .primary-btn { width: min(100%, 420px); text-transform: none; letter-spacing: 0; }
+
 /* ---------- Overlays ---------- */
 
 .overlay {
@@ -866,6 +885,7 @@ kbd {
         <button class="primary-btn" id="share-btn" type="button">Share</button>
         <button class="outline-btn" id="results-btn" type="button">Results</button>
       </div>
+      <p class="next-game" id="next-game" hidden>Come back in<strong id="next-countdown">--:--:--</strong></p>
     </section>
   </main>
 </div>
@@ -1338,6 +1358,7 @@ window.SAMPLE_DATA = {"streamers":[{"login":"jynxzi","name":"Jynxzi","avatar":nu
   const KEY_STATS = "whosechat.stats";
   const KEY_PLAYED = "whosechat.played";
   const KEY_SOUND = "whosechat.sound";
+  const KEY_DAILY = "gtc.daily";
 
   // ---------- sounds ----------
   // Short tones made in the browser (no audio files): a tick for presses,
@@ -1428,6 +1449,120 @@ window.SAMPLE_DATA = {"streamers":[{"login":"jynxzi","name":"Jynxzi","avatar":nu
     return a;
   }
   const fmt = (n) => n.toLocaleString("en-US");
+
+  // ---------- daily game ----------
+  // One game a day. Everyone playing on the same date gets the same clips, and a
+  // new game starts at midnight in the player's own time zone. Progress is saved,
+  // so a refresh continues where the player stopped.
+
+  function dayKey(date) {
+    const m = String(date.getMonth() + 1).padStart(2, "0");
+    const d = String(date.getDate()).padStart(2, "0");
+    return date.getFullYear() + "-" + m + "-" + d;
+  }
+  function shiftDay(key, days) {
+    const [y, m, d] = key.split("-").map(Number);
+    return new Date(Date.UTC(y, m - 1, d + days)).toISOString().slice(0, 10);
+  }
+  function hash32(text) {
+    let h = 0x811c9dc5;
+    for (let i = 0; i < text.length; i++) {
+      h ^= text.charCodeAt(i);
+      h = Math.imul(h, 0x01000193);
+    }
+    return h >>> 0;
+  }
+  // Random numbers that come out the same for everyone with the same seed.
+  function seeded(seed) {
+    let a = seed >>> 0;
+    return () => {
+      a = (a + 0x6d2b79f5) | 0;
+      let t = Math.imul(a ^ (a >>> 15), 1 | a);
+      t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t;
+      return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
+    };
+  }
+  function seededShuffle(arr, rng) {
+    const a = arr.slice();
+    for (let i = a.length - 1; i > 0; i--) {
+      const j = Math.floor(rng() * (i + 1));
+      [a[i], a[j]] = [a[j], a[i]];
+    }
+    return a;
+  }
+
+  const today = dayKey(new Date());
+  let dailyOrder = []; // today's usable clips, in today's order
+  let dailyPicks = []; // the clip for each round
+
+  function planDay() {
+    // Clips the collector added in the last two days wait before they appear, so
+    // players in every time zone get exactly the same clips on the same date.
+    const cutoff = shiftDay(today, -2);
+    let pool = data.clips.filter((c) => !c.a || c.a <= cutoff);
+    if (pool.length < ROUNDS) pool = data.clips.slice();
+    dailyOrder = pool
+      .map((c) => ({ c, k: hash32(today + "|" + c.id) }))
+      .sort((x, y) => x.k - y.k || (x.c.id < y.c.id ? -1 : 1))
+      .map((x) => x.c);
+    // Five different streamers when there are enough of them.
+    const streamers = new Set(dailyOrder.map((c) => c.s)).size;
+    dailyPicks = [];
+    const used = new Set();
+    for (const c of dailyOrder) {
+      if (dailyPicks.length >= ROUNDS) break;
+      const prev = dailyPicks[dailyPicks.length - 1];
+      if (streamers >= ROUNDS ? used.has(c.s) : prev && prev.s === c.s) continue;
+      dailyPicks.push(c);
+      used.add(c.s);
+    }
+    for (const c of dailyOrder) {
+      if (dailyPicks.length >= ROUNDS) break;
+      if (!dailyPicks.includes(c)) dailyPicks.push(c);
+    }
+  }
+
+  function saveDaily(current) {
+    store.set(KEY_DAILY, {
+      day: today,
+      score: session.score,
+      streak: session.streak,
+      history: session.history.map((h) => ({ s: h.streamer.login, correct: h.correct, skips: h.skips, points: h.points })),
+      done: session.history.length >= ROUNDS,
+      current: current || null, // the round in progress: its clip and skips used
+    });
+  }
+
+  let countdownTimer = null;
+  function startCountdown() {
+    const box = $("next-game");
+    const el = $("next-countdown");
+    if (!box || !el) return;
+    const [y, m, d] = today.split("-").map(Number);
+    const target = new Date(y, m - 1, d + 1); // the player's next midnight
+    box.hidden = false;
+    const tick = () => {
+      const ms = target - Date.now();
+      if (ms <= 0) {
+        clearInterval(countdownTimer);
+        box.textContent = "";
+        const btn = document.createElement("button");
+        btn.type = "button";
+        btn.className = "primary-btn";
+        btn.textContent = "Play today's game";
+        btn.addEventListener("click", () => location.reload());
+        box.appendChild(btn);
+        return;
+      }
+      const t = Math.floor(ms / 1000);
+      el.textContent = [Math.floor(t / 3600), Math.floor((t % 3600) / 60), t % 60]
+        .map((n) => String(n).padStart(2, "0"))
+        .join(":");
+    };
+    tick();
+    clearInterval(countdownTimer);
+    countdownTimer = setInterval(tick, 1000);
+  }
 
   function hue(text) {
     let h = 0;
@@ -1523,46 +1658,31 @@ window.SAMPLE_DATA = {"streamers":[{"login":"jynxzi","name":"Jynxzi","avatar":nu
 
   // ---------- rounds ----------
 
-  function playedSet() {
-    return new Set(store.get(KEY_PLAYED, []));
-  }
-
   function markPlayed(id) {
     const list = store.get(KEY_PLAYED, []).filter((x) => x !== id);
     list.push(id);
     store.set(KEY_PLAYED, list.slice(-3000));
   }
 
-  function pickClip(login) {
-    const all = clipsByStreamer.get(login) || [];
-    const played = playedSet();
-    let fresh = all.filter((c) => !played.has(c.id));
-    if (!fresh.length) {
-      // Every clip of this streamer was played already: start their pool over.
-      const ids = new Set(all.map((c) => c.id));
-      store.set(KEY_PLAYED, [...played].filter((id) => !ids.has(id)));
-      fresh = all;
-    }
-    return pick(fresh);
-  }
-
-  async function prepareRound() {
-    let logins = [...clipsByStreamer.keys()];
-    if (logins.length > 1 && lastStreamer) logins = logins.filter((l) => l !== lastStreamer);
-
-    for (let attempt = 0; attempt < 6; attempt++) {
-      const login = pick(logins);
-      const meta = pickClip(login);
+  // Round n (1, 2, ...) of today's game. If its clip can't be loaded, the next
+  // clip in today's order is used instead.
+  async function prepareRound(n) {
+    const candidates = [dailyPicks[n - 1], ...dailyOrder.filter((c) => !dailyPicks.includes(c))].filter(Boolean);
+    for (let attempt = 0; attempt < Math.min(6, candidates.length); attempt++) {
+      const meta = candidates[attempt];
+      const login = meta.s;
       let clip = null;
       try {
         clip = await data.getClip(meta.id);
       } catch (e) {
         clip = null;
       }
-      if (!clip || !clip.messages || !clip.messages.length) continue;
-
       const correct = byLogin.get(login);
-      const others = shuffle(data.streamers.filter((s) => s.login !== login)).slice(0, cfg.choices - 1);
+      if (!clip || !clip.messages || !clip.messages.length || !correct) continue;
+
+      // The other streamers to pick from are the same for everyone, too.
+      const rng = seeded(hash32(today + "|choices|" + meta.id));
+      const others = seededShuffle(data.streamers.filter((s) => s.login !== login), rng).slice(0, cfg.choices - 1);
       const len = clipLength(clip);
       const stops = stopsFor(len);
       return {
@@ -1571,7 +1691,7 @@ window.SAMPLE_DATA = {"streamers":[{"login":"jynxzi","name":"Jynxzi","avatar":nu
         stops,
         span: stops[stops.length - 1],
         correct,
-        choices: shuffle([correct, ...others]),
+        choices: seededShuffle([correct, ...others], rng),
         stage: 0,
         phase: "ready",
       };
@@ -1620,8 +1740,9 @@ window.SAMPLE_DATA = {"streamers":[{"login":"jynxzi","name":"Jynxzi","avatar":nu
     if (quiet !== true) Sfx.click();
     $("chat-start").hidden = true;
     $("choices").className = "choices live";
-    $("skip-btn").disabled = MAX_SKIPS === 0;
-    chat.playUntil(round.stops[0]);
+    $("skip-btn").disabled = MAX_SKIPS === 0 || round.stage >= MAX_SKIPS;
+    chat.playUntil(round.stops[round.stage]);
+    saveDaily({ id: round.clip.id, stage: round.stage });
   }
 
   function renderSkips(used) {
@@ -1637,6 +1758,7 @@ window.SAMPLE_DATA = {"streamers":[{"login":"jynxzi","name":"Jynxzi","avatar":nu
     openMeter(round.stage);
     if (round.stage >= MAX_SKIPS) $("skip-btn").disabled = true;
     chat.playUntil(round.stops[round.stage]);
+    saveDaily({ id: round.clip.id, stage: round.stage });
   }
 
   function guess(login, button) {
@@ -1671,8 +1793,9 @@ window.SAMPLE_DATA = {"streamers":[{"login":"jynxzi","name":"Jynxzi","avatar":nu
     bump("stat-streak", fmt(session.streak));
 
     session.history.push({ streamer: round.correct, correct, skips: round.stage, points });
+    saveDaily(null);
     const result = { correct, points, picked: byLogin.get(login), stats };
-    if (!isLastRound()) upcoming = prepareRound().catch(() => null);
+    if (!isLastRound()) upcoming = prepareRound(session.round + 1).catch(() => null);
     guessTimer = setTimeout(() => openResult(result), 650);
   }
 
@@ -1855,12 +1978,15 @@ window.SAMPLE_DATA = {"streamers":[{"login":"jynxzi","name":"Jynxzi","avatar":nu
     $("summary-score").textContent = fmt(session.score);
     $("summary").hidden = false;
     document.querySelector(".board").classList.add("over");
+    startCountdown();
   }
 
   function shareText() {
     const right = session.history.filter((h) => h.correct).length;
     const squares = session.history.map((h) => (h.correct ? "🟩" : "🟥")).join("");
-    const lines = ["Guess the Chat " + right + "/" + session.history.length + "  " + fmt(session.score) + " pts", squares];
+    const [y, m, d] = today.split("-").map(Number);
+    const date = new Date(y, m - 1, d).toLocaleDateString("en-US", { month: "short", day: "numeric" });
+    const lines = ["Guess the Chat " + date + "  " + right + "/" + session.history.length + "  " + fmt(session.score) + " pts", squares];
     if (/^https?:$/.test(location.protocol)) lines.push(location.origin + location.pathname);
     return lines.join("\n");
   }
@@ -1906,7 +2032,7 @@ window.SAMPLE_DATA = {"streamers":[{"login":"jynxzi","name":"Jynxzi","avatar":nu
     upcoming = null;
     if (!r) {
       try {
-        r = await prepareRound();
+        r = await prepareRound(session.round);
       } catch (e) {
         showStartCover("Could not load the next chat. Refresh the page to try again.");
         return;
@@ -2016,9 +2142,46 @@ window.SAMPLE_DATA = {"streamers":[{"login":"jynxzi","name":"Jynxzi","avatar":nu
       if (s.avatar) new Image().src = s.avatar;
     });
 
+    planDay();
+
+    // Continue today's game if it was started on this device.
+    const saved = store.get(KEY_DAILY, null);
+    let resume = null;
+    if (saved && saved.day === today && Array.isArray(saved.history)) {
+      session.history = saved.history.slice(0, ROUNDS).map((h) => ({
+        streamer: byLogin.get(h.s) || { login: h.s, name: h.s },
+        correct: !!h.correct,
+        skips: h.skips || 0,
+        points: h.points || 0,
+      }));
+      session.score = saved.score || 0;
+      session.streak = saved.streak || 0;
+      session.round = Math.min(ROUNDS, session.history.length + 1);
+      resume = saved.current;
+    }
+    $("stat-score").textContent = fmt(session.score);
+    $("stat-streak").textContent = fmt(session.streak);
+    $("stat-round").textContent = roundLabel();
+
+    // Already played today: show the results and the countdown.
+    if (session.history.length >= ROUNDS) {
+      showSummary();
+      return;
+    }
+
     try {
-      showRound(await prepareRound());
-      showStartCover("Whose chat is this? Press play, then pick the streamer.");
+      const r = await prepareRound(session.round);
+      if (resume && resume.id === r.clip.id && resume.stage > 0) r.stage = Math.min(resume.stage, MAX_SKIPS);
+      showRound(r);
+      if (r.stage) {
+        renderSkips(r.stage);
+        openMeter(r.stage);
+      }
+      showStartCover(
+        session.history.length || r.stage
+          ? "Press play to continue today's game."
+          : "Whose chat is this? Press play, then pick the streamer.",
+      );
     } catch (e) {
       showStartCover("Could not load a chat. Refresh the page to try again.");
     }
