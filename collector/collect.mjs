@@ -877,7 +877,8 @@ export async function collect({ root = path.resolve(HERE, ".."), dry = false, on
         messages,
       };
       if (!dry) await fs.writeFile(path.join(clipsDir, clip.id + ".json"), JSON.stringify(record));
-      pool.push({ id: clip.id, s: login, v: clip.view_count, d: clip.created_at });
+      // a: the day the clip was added. Daily games use clips added at least two days ago.
+      pool.push({ id: clip.id, s: login, v: clip.view_count, d: clip.created_at, a: today });
       have.add(clip.id);
       row.added++;
       log(`+ ${login}: "${clip.title}" (${clip.view_count} views, ${messages.length} messages)`);
