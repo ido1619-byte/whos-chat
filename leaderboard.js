@@ -244,6 +244,8 @@ function init() {
 
   // Creates or updates the signed-in player's row and returns it.
   // `rename` also picks a new made-up name.
+  let rowFor = null; // the account known to have a row already (so no name is needed)
+
   async function saveEntry(rename = false) {
     const fb = await acct.ready;
     const user = acct.user;
@@ -251,7 +253,17 @@ function init() {
     const S = fb.store;
     const ref = S.doc(fb.db, "leaderboard", user.uid);
     const game = currentGame();
-    return S.runTransaction(fb.db, async (tx) => {
+
+    // A new name is needed for a new row, or when asked for: pick one nobody has.
+    let fresh = null;
+    if (rename) fresh = await freeName(fb, user.uid);
+    else if (rowFor !== user.uid) {
+      const snap = await S.getDoc(ref);
+      if (snap.exists()) rowFor = user.uid;
+      else fresh = await freeName(fb, user.uid);
+    }
+
+    const saved = await S.runTransaction(fb.db, async (tx) => {
       const snap = await tx.get(ref);
       const old = snap.exists() ? snap.data() : null;
       let next;
@@ -260,7 +272,7 @@ function init() {
         const today = dayNumber(localDayKey(new Date()));
         const day = game ? game.day : today;
         const pts = game ? game.score : 0;
-        next = { ...randomName(), points: pts, day, dayPoints: pts };
+        next = { ...(fresh || randomName()), points: pts, day, dayPoints: pts };
       } else {
         next = {
           a: old.a, n: old.n, s: old.s, t: old.t, k: old.k,
@@ -268,7 +280,7 @@ function init() {
         };
         let changed = false;
         if (rename) {
-          Object.assign(next, randomName());
+          Object.assign(next, fresh || randomName());
           changed = true;
         }
         if (game && game.day === old.day && game.score > old.dayPoints) {
@@ -289,6 +301,29 @@ function init() {
       tx.set(ref, next);
       return next;
     });
+    rowFor = user.uid;
+    return saved;
+  }
+
+  // A random name that no other player on the board has. Players who share a
+  // name would also share its number, so only rows with that number are checked.
+  async function freeName(fb, uid) {
+    const S = fb.store;
+    const col = S.collection(fb.db, "leaderboard");
+    let name = randomName();
+    for (let tries = 0; tries < 8; tries++) {
+      let taken = false;
+      try {
+        const same = await S.getDocs(S.query(col, S.where("k", "==", name.k)));
+        const wanted = nameOf(name).toLowerCase();
+        taken = same.docs.some((d) => d.id !== uid && nameOf(d.data()).toLowerCase() === wanted);
+      } catch (e) {
+        return name; // can't check right now; a clash is very unlikely anyway
+      }
+      if (!taken) return name;
+      name = randomName();
+    }
+    return name;
   }
 
   // ----- drawing -----
