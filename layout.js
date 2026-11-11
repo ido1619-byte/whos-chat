@@ -159,7 +159,7 @@ body.gtc-layout .play-btn svg { margin-left: 0; }
   background: var(--raise, #26262c);
 }
 .gtc-help-meter span { position: absolute; top: 0; bottom: 0; left: 0; }
-.gtc-help-meter .open { width: 40%; background: var(--meter-open, #3b2768); }
+.gtc-help-meter .open { width: 34%; background: var(--meter-open, #3b2768); }
 .gtc-help-meter .fill { width: 14%; background: var(--accent, #9147ff); }
 /* the same dividers as the game's bar, one where each skip stops */
 .gtc-help-meter .tick {
@@ -365,19 +365,15 @@ if (helpModal && helpClose) {
   helpModal.prepend(box);
   helpModal.setAttribute("aria-labelledby", "gtc-help-title");
 
-  // Dividers like the game's own bar, from the game's skip times
-  // (the game bar spans the round, so the last stop is the end of the bar).
+  // Dividers like the game's own bar: each part a little longer than the one
+  // before, and the unlocked part (34%) ending on one of them.
   const meter = box.querySelector(".gtc-help-meter");
-  const secs = (window.GAME_CONFIG && window.GAME_CONFIG.revealSeconds) || [1, 2, 4, 10, 25];
-  const span = secs[secs.length - 1];
-  for (const t of secs.slice(0, -1)) {
+  for (const left of [8, 18, 34, 62]) {
     const tick = document.createElement("span");
     tick.className = "tick";
-    tick.style.left = (t / span) * 100 + "%";
+    tick.style.left = left + "%";
     meter.appendChild(tick);
   }
-  // The unlocked part ends on a divider, as in the game (here: after 3 skips).
-  if (secs.length > 3) meter.querySelector(".open").style.width = (secs[3] / span) * 100 + "%";
 
   // The three faces are streamers from the game (their Twitch pictures, as on the
   // game's own buttons), three different ones each time the window opens.
