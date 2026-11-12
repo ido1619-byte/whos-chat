@@ -1,0 +1,179 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Page not found · Guess the Chat</title>
+<meta name="robots" content="noindex">
+<link rel="icon" href="/favicon.ico?v=1">
+<link rel="apple-touch-icon" href="/apple-touch-icon.png">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,700;12..96,800&family=Inter:wght@400;500;600;700&display=swap">
+<style>
+/* Guess the Chat: the "page not found" page. GitHub Pages shows it for any
+   address on the site that doesn't exist. Same colors and fonts as the game. */
+:root {
+  --bg: #0e0e10;
+  --chat: #18181b;
+  --line: #2f2f35;
+  --fg: #efeff1;
+  --muted: #adadb8;
+  --faint: #53535f;
+  --accent: #9147ff;
+  --accent-hi: #a970ff;
+  --on-accent: #ffffff;
+  --chip: #231a36;
+  --chip-line: #3a2b5e;
+  --chip-fg: #dccbff;
+  --font-display: "Bricolage Grotesque", "Inter", system-ui, sans-serif;
+  --font-ui: "Inter", system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+  color-scheme: dark;
+}
+* { box-sizing: border-box; }
+html, body { margin: 0; }
+body {
+  min-height: 100vh;
+  min-height: 100dvh;
+  display: grid;
+  place-items: center;
+  padding: 32px 16px;
+  background: var(--bg);
+  color: var(--fg);
+  font-family: var(--font-ui);
+}
+main { width: 100%; max-width: 440px; display: grid; gap: 22px; text-align: center; }
+
+.logo {
+  justify-self: center;
+  font-family: var(--font-display);
+  font-weight: 800;
+  font-size: 30px;
+  letter-spacing: -0.03em;
+  color: var(--accent-hi);
+  text-decoration: none;
+}
+
+/* the chat, like the game's */
+.chat {
+  text-align: left;
+  background: var(--chat);
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  overflow: hidden;
+}
+.chat-head {
+  display: flex;
+  align-items: center;
+  height: 40px;
+  padding: 0 14px;
+  border-bottom: 1px solid var(--line);
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--muted);
+}
+.chat-title { text-transform: uppercase; letter-spacing: 0.06em; }
+.chat-state { margin-left: auto; display: flex; align-items: center; gap: 6px; }
+.chat-state::before { content: ""; width: 7px; height: 7px; border-radius: 50%; background: var(--faint); }
+.chat-list { min-height: 196px; padding: 8px 0 12px; }
+.msg { padding: 4px 16px; font-size: 13.5px; line-height: 20px; overflow-wrap: anywhere; }
+.msg.system { color: var(--muted); }
+.msg .name { font-weight: 700; }
+.msg.pop { animation: pop 0.25s ease both; }
+@keyframes pop { from { opacity: 0; transform: translateY(6px); } }
+
+.err { display: grid; justify-items: center; gap: 4px; margin-top: 4px; }
+.err-label {
+  padding: 4px 12px;
+  border-radius: 999px;
+  background: rgba(226, 71, 79, 0.14);
+  border: 1px solid rgba(226, 71, 79, 0.45);
+  color: #ff6b73;
+  font-size: 13px;
+  font-weight: 800;
+  letter-spacing: 0.12em;
+}
+.err-code {
+  font-family: var(--font-display);
+  font-weight: 800;
+  font-size: clamp(84px, 26vw, 128px);
+  line-height: 0.9;
+  letter-spacing: -0.04em;
+  color: var(--accent-hi);
+}
+h1 {
+  margin: -8px 0 0;
+  font-family: var(--font-display);
+  font-weight: 800;
+  font-size: clamp(30px, 8vw, 38px);
+  line-height: 1.05;
+  letter-spacing: -0.03em;
+}
+p { margin: -8px 0 0; color: var(--muted); font-size: 15px; line-height: 1.5; }
+.btn {
+  justify-self: center;
+  padding: 12px 22px;
+  border-radius: 9px;
+  background: var(--accent);
+  color: var(--on-accent);
+  font-weight: 700;
+  font-size: 15px;
+  text-decoration: none;
+}
+.btn:hover { background: var(--accent-hi); }
+.btn:focus-visible, .logo:focus-visible { outline: 2px solid var(--accent-hi); outline-offset: 3px; }
+
+/* light theme (when "Dark theme" is off in the game's Settings) */
+html.gtc-light .msg .name { filter: brightness(0.78) saturate(1.25); }
+html.gtc-light { color-scheme: light; }
+html.gtc-light .err-label { color: #c42d36; }
+</style>
+<script src="/theme.js?v=1"></script>
+</head>
+<body>
+<main>
+  <a class="logo" href="/">Guess the Chat</a>
+
+  <div class="chat" aria-hidden="true">
+    <div class="chat-head"><span class="chat-title">Stream chat</span><span class="chat-state">Offline</span></div>
+    <div class="chat-list" id="chat"><div class="msg system">Welcome to the chat room!</div></div>
+  </div>
+
+  <div class="err"><span class="err-label">ERROR</span><span class="err-code">404</span></div>
+  <h1>This chat doesn't exist</h1>
+  <p>The page you're looking for isn't here. Maybe the stream ended.</p>
+  <a class="btn" href="/">Back to the game</a>
+</main>
+<script>
+  // Chat reacts to the missing page, one message at a time.
+  (function () {
+    var lines = [
+      ["NightPigeon", "#1e90ff", "where did the page go"],
+      ["CrispyTaco42", "#ff7f50", "404 LUL"],
+      ["salty_walrus", "#9acd32", "streamer took a wrong turn"],
+      ["GoblinMain", "#ff69b4", "F"],
+      ["quiet_otter7", "#daa520", "this link is cooked"],
+      ["MegaLlama", "#2fd4a8", "just go back to the game chat"]
+    ];
+    var chat = document.getElementById("chat");
+    var still = window.matchMedia && window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+    try { if (localStorage.getItem("gtc.animations") === "off") still = true; } catch (e) {}
+    lines.forEach(function (l, i) {
+      function add() {
+        var m = document.createElement("div");
+        m.className = "msg" + (still ? "" : " pop");
+        var n = document.createElement("span");
+        n.className = "name";
+        n.style.color = l[1];
+        n.textContent = l[0];
+        m.appendChild(n);
+        m.appendChild(document.createTextNode(": " + l[2]));
+        chat.appendChild(m);
+      }
+      if (still) add();
+      else setTimeout(add, 450 + i * 550);
+    });
+  })();
+</script>
+</body>
+</html>
