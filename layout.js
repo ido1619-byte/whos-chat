@@ -76,6 +76,22 @@ body.gtc-layout .play-btn svg { margin-left: 0; }
 .gtc-toolbar .icon-btn:hover { border-color: var(--faint, #53535f); color: var(--fg, #efeff1); }
 .gtc-toolbar .icon-btn svg { display: block; width: 20px; height: 20px; }
 .gtc-toolbar #sound-btn { display: none; } /* sound is in Settings now */
+.gtc-vibe {
+  position: relative;
+  top: 30px; /* a little below the buttons' line */
+  margin-right: auto;
+  font-family: var(--font-display, "Bricolage Grotesque", system-ui, sans-serif);
+  font-weight: 800;
+  font-size: 17px;
+  letter-spacing: 0.04em;
+  white-space: nowrap;
+  color: var(--muted, #adadb8);
+  opacity: 0.22;
+  cursor: default;
+  user-select: none;
+  transition: opacity 0.25s ease, color 0.25s ease;
+}
+.gtc-vibe:hover { opacity: 1; color: var(--accent-hi, #a970ff); }
 
 /* Signed out: the account button is just the words "Sign in".
    (Signed in, it stays a round picture.) */
@@ -329,6 +345,9 @@ html body > .gtc-overlay.gtc-closing .gtc-window {
   }
 }
 
+/* very narrow phones: no room next to the buttons */
+@media (max-width: 359px) { .gtc-vibe { display: none; } }
+
 /* ----- phones ----- */
 @media (max-width: 440px) {
   .top-row .logo { font-size: clamp(34px, 8vw, 46px); }
@@ -336,6 +355,7 @@ html body > .gtc-overlay.gtc-closing .gtc-window {
   .gtc-toolbar .icon-btn { width: 40px; height: 40px; font-size: 16px; }
   .gtc-toolbar .icon-btn svg { width: 18px; height: 18px; }
   .gtc-toolbar #account-btn:not(.signed-in) { height: 40px; font-size: 16px; }
+  .gtc-vibe { top: 0; font-size: 12px; }
   .gtc-title, .gtc-help .gtc-title { font-size: 30px; }
   .gtc-help { padding: 26px 18px 18px; }
 }
@@ -388,6 +408,11 @@ bar.className = "gtc-toolbar";
 for (const button of [soundBtn, helpBtn, document.getElementById("stats-btn"), settingsBtn, accountBtn]) {
   if (button) bar.appendChild(button);
 }
+// A small "W VIBE CODED" in the top-left corner: faint, clear on hover.
+const vibe = document.createElement("span");
+vibe.className = "gtc-vibe";
+vibe.textContent = "W VIBE CODED";
+bar.prepend(vibe);
 document.body.prepend(bar);
 document.body.classList.add("gtc-layout");
 
