@@ -11,7 +11,9 @@
     "joe_bartolozzi",
     "clix",
     "plaqueboymax",
-    "2xrakai"
+    "2xrakai",
+    "valkyrae",
+    "extraemily"
   ],
   "lookbackDays": 60,
   "minViews": 1000,
@@ -19,7 +21,8 @@
     "jynxzi": 3000,
     "kaicenat": 2000,
     "plaqueboymax": 500,
-    "2xrakai": 500
+    "2xrakai": 500,
+    "valkyrae": 500
   },
   "minClipAgeDays": 3,
   "minDurationSeconds": 15,
