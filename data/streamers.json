@@ -1,5 +1,5 @@
 {
-  "updated": "2026-11-11T11:55:31.864Z",
+  "updated": "2026-11-12T05:42:21.165Z",
   "streamers": [
     {
       "login": "jynxzi",
@@ -60,6 +60,16 @@
       "login": "2xrakai",
       "name": "2xRaKai",
       "avatar": "https://static-cdn.jtvnw.net/jtv_user_pictures/b5d43658-37ed-4481-907d-3b6939bd0825-profile_image-300x300.png"
+    },
+    {
+      "login": "valkyrae",
+      "name": "Valkyrae",
+      "avatar": "https://static-cdn.jtvnw.net/jtv_user_pictures/a1507999-a5ea-4dd1-911c-63fc493894e6-profile_image-300x300.png"
+    },
+    {
+      "login": "extraemily",
+      "name": "ExtraEmily",
+      "avatar": "https://static-cdn.jtvnw.net/jtv_user_pictures/4d2f4f20-4dba-4866-8a41-542378cb7089-profile_image-300x300.png"
     }
   ]
 }
