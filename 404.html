@@ -79,6 +79,7 @@ main { width: 100%; max-width: 440px; display: grid; gap: 22px; text-align: cent
 .msg { padding: 4px 16px; font-size: 13.5px; line-height: 20px; overflow-wrap: anywhere; }
 .msg.system { color: var(--muted); }
 .msg .name { font-weight: 700; }
+.msg .emote { height: 28px; width: auto; margin: -6px 1px; vertical-align: middle; }
 .msg.pop { animation: pop 0.25s ease both; }
 @keyframes pop { from { opacity: 0; transform: translateY(6px); } }
 
@@ -149,7 +150,7 @@ html.gtc-light .err-label { color: #c42d36; }
   (function () {
     var lines = [
       ["NightPigeon", "#1e90ff", "where did the page go"],
-      ["CrispyTaco42", "#ff7f50", "404 LUL"],
+      ["CrispyTaco42", "#ff7f50", "404 ", "omgBruh"],
       ["salty_walrus", "#9acd32", "streamer took a wrong turn"],
       ["GoblinMain", "#ff69b4", "F"],
       ["quiet_otter7", "#daa520", "this link is cooked"],
@@ -168,6 +169,14 @@ html.gtc-light .err-label { color: #c42d36; }
         n.textContent = l[0];
         m.appendChild(n);
         m.appendChild(document.createTextNode(": " + l[2]));
+        if (l[3]) {
+          // 7TV emote (file in the repo, same as the game's emotes)
+          var img = document.createElement("img");
+          img.className = "emote";
+          img.src = "/" + l[3] + "-4x.gif";
+          img.alt = img.title = l[3];
+          m.appendChild(img);
+        }
         chat.appendChild(m);
       }
       if (still) add();
